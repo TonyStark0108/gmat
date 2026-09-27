@@ -105,21 +105,36 @@ export function LoadContent() {
   const { setContent } = useApp();
   const ref = useRef<HTMLInputElement>(null);
   const [err, setErr] = useState("");
+  const [over, setOver] = useState(false);
+  const load = async (f: File | undefined) => {
+    if (!f) return;
+    setErr("");
+    try { setContent(await saveContent(await readJsonFile(f))); }
+    catch (x) { setErr(`${(x as Error).message} Pick the file called gmat-content-v1.json.`); }
+  };
   return (
     <Screen>
-      <div className="column">
+      <div className="column" onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
+        onDrop={(e) => { e.preventDefault(); setOver(false); void load(e.dataTransfer.files[0]); }}>
         <div className="eyebrow">Your study file</div>
         <div className="title">Load the study file once.</div>
         <div className="muted" style={{ fontSize: 17, lineHeight: 1.4 }}>
-          The plan, the reading passages and the answer keys live in one file on your laptop, <span className="mono" style={{ fontSize: 13 }}>gmat-content-v1.json</span>.
+          The plan, the reading passages and the answer keys live in one file, <span className="mono" style={{ fontSize: 13 }}>gmat-content-v1.json</span>.
           The app keeps its own copy, so this happens once. Nothing is uploaded anywhere.
         </div>
+        <div className="box" style={{ borderStyle: "dashed", borderColor: over ? "var(--ink)" : "var(--line-3)", background: over ? "var(--soft)" : "transparent" }}>
+          <div style={{ fontSize: 17 }}>Where it is</div>
+          <div className="small" style={{ lineHeight: 1.6 }}>
+            On the laptop the app was built on: <b>Documents › 01_Projects › GMAT_ALL_IN_ONE › data</b>.<br />
+            On another laptop: wherever you copied it (Downloads, a pen drive, your Drive).
+          </div>
+          <div className="small">Click below and pick it, or drag the file onto this box.</div>
+        </div>
         <button className="btn" onClick={() => ref.current?.click()}>Choose the file</button>
-        <input ref={ref} type="file" accept="application/json,.json" hidden onChange={async (e) => {
-          const f = e.target.files?.[0]; if (!f) return;
-          try { setContent(await saveContent(await readJsonFile(f))); } catch (x) { setErr((x as Error).message); }
-        }} />
-        {err && <div className="small">{err}</div>}
+        <input ref={ref} type="file" accept="application/json,.json" hidden onChange={(e) => void load(e.target.files?.[0])} />
+        {err && <div className="note"><div style={{ fontSize: 17 }}>{err}</div></div>}
+        <div className="spacer" />
+        <button className="back" onClick={() => go("/dayone")}>← Back to the laptop checks</button>
       </div>
     </Screen>
   );
