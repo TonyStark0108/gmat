@@ -32,6 +32,7 @@ export type EventBody =
   | { type: "level"; level: number }
   | { type: "backup"; where: "folder" | "download"; file: string }
   | { type: "backup.offsite" }
+  | { type: "restored"; added: number }
   | { type: "admin"; piece: string; answer: "done" | "not now" };
 
 export type MixChoice = "mix" | "quant" | "verbal" | "di";

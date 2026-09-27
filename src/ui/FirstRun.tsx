@@ -15,13 +15,15 @@ const SESSION_FLAG = "gmat-session-open";
 /** Has the day-one check passed, or has the risk been accepted? */
 export function dayOnePassed(d: ReturnType<typeof useApp>["d"]): boolean {
   const x = d.dayOne;
-  return !!x.accepted?.ok || (!!x.persist && !!x.reopened?.ok && !!x.folder);
+  // Passing all three isn't enough on its own: the results stay on screen until "Next".
+  return !!x.accepted?.ok;
 }
 
 export function DayOne({ fromSettings }: { fromSettings?: boolean }) {
   const { d } = useApp();
   const x = d.dayOne;
   const [markerSet, setMarkerSet] = useState(false);
+  const allOk = !!x.persist && !!x.reopened?.ok && !!x.folder;
 
   // 1. ask the browser to keep the data
   useEffect(() => {
@@ -87,11 +89,13 @@ export function DayOne({ fromSettings }: { fromSettings?: boolean }) {
         </div>
 
         <div className="spacer" />
-        {dayOnePassed(d) && !x.accepted ? (
-          <button className="btn" onClick={() => go(fromSettings ? "/settings" : "/")}>{fromSettings ? "Back to settings" : "Next"}</button>
+        {allOk ? (
+          <button className="btn" onClick={async () => { await record({ type: "dayone", step: "accepted", ok: true, detail: "passed" }); go(fromSettings ? "/settings" : "/"); }}>
+            {fromSettings ? "Back to settings" : "Next"}
+          </button>
         ) : (
           <div className="row">
-            <button className="btn ghost" style={{ flex: 1 }} onClick={async () => { await record({ type: "dayone", step: "accepted", ok: true }); go(fromSettings ? "/settings" : "/"); }}>
+            <button className="btn ghost" style={{ flex: 1 }} onClick={async () => { await record({ type: "dayone", step: "accepted", ok: true, detail: "risk" }); go(fromSettings ? "/settings" : "/"); }}>
               Use it anyway, I'll back up often
             </button>
           </div>

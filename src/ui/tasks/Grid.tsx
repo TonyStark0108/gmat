@@ -3,6 +3,7 @@
 // saved the moment it's made. Entering as you go times each question without a visible clock.
 
 import { useMemo, useRef, useState } from "react";
+import type { AnswerRec } from "../../core/state";
 import { useApp } from "../../app/store";
 import { now } from "../../core/clock";
 import { BOOK_NAMES, type BookQuestion } from "../../core/content";
@@ -28,7 +29,12 @@ export function BookGrid({ piece, onDone, numbers, bookId, embedded, onSubmitted
   const [a, b] = numbers ?? piece.numbers ?? [1, 1];
   const keys = useMemo(() => new Map<number, BookQuestion>((content?.book_keys.books[book]?.questions ?? []).map((q) => [q.n, q])), [content, book]);
   const nums = useMemo(() => Array.from({ length: b - a + 1 }, (_, i) => a + i), [a, b]);
-  const answers = d.answers.get(piece.id) ?? new Map();
+  // What's typed shows at once; the saved log catches up a moment later (fast typing must never
+  // land on a stale "next blank" question).
+  const typedNow = useRef(new Map<string, AnswerRec>());
+  const [, bump] = useState(0);
+  const saved = d.answers.get(piece.id) ?? new Map<string, AnswerRec>();
+  const answers = new Map<string, AnswerRec>([...saved, ...typedNow.current]);
   const startedAt = d.started.get(piece.id) ?? now().getTime();
   const time = useTaskTime(piece.id, "desk", "book set", 15);
   const [typed, setTyped] = useState("");
@@ -42,7 +48,10 @@ export function BookGrid({ piece, onDone, numbers, bookId, embedded, onSubmitted
 
   async function put(n: number, value: Answer, unsure: boolean) {
     time.poke();
-    await record({ type: "answer", piece: piece.id, q: n, value, unsure, sinceStartMs: now().getTime() - startedAt });
+    const sinceStartMs = now().getTime() - startedAt;
+    typedNow.current.set(String(n), { value, unsure, sinceStartMs, ts: now().getTime() });
+    bump((x) => x + 1);
+    await record({ type: "answer", piece: piece.id, q: n, value, unsure, sinceStartMs });
     const minutesIn = (now().getTime() - startedAt) / 60_000;
     focus.boundary(minutesIn, false);     // a long set offers the break at the next question
   }
@@ -54,7 +63,11 @@ export function BookGrid({ piece, onDone, numbers, bookId, embedded, onSubmitted
   async function onTyped(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key !== "Enter") return;
     const raw = typed.trim();
-    if (!raw) { setConfirm(true); return; }
+    if (!raw) {
+      // Enter on an empty box finishes: straight away when every question has an answer
+      if (answered === nums.length) void submit(); else setConfirm(true);
+      return;
+    }
     // a letter on its own answers the next blank question
     const bare = raw.match(/^([a-e])\s*(s|\?)?$/i);
     const target = bare ? nextBlank() : undefined;
@@ -89,7 +102,7 @@ export function BookGrid({ piece, onDone, numbers, bookId, embedded, onSubmitted
         placeholder={`Type ${a}c, or ${a}cs for not sure, then Enter. A letter on its own answers the next one.`}
         style={{ height: 46, border: "1.5px solid var(--line-2)", borderRadius: 10, padding: "0 12px", font: "400 13px var(--mono)", background: "#fff" }} />
       {hint && <div className="small">{hint}</div>}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(330px, 1fr))", gap: "6px 22px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(400px, 1fr))", gap: "6px 22px" }}>
         {nums.map((n) => {
           const c = cur(n);
           return (
@@ -108,7 +121,7 @@ export function BookGrid({ piece, onDone, numbers, bookId, embedded, onSubmitted
                 })
               )}
               <button onClick={() => void put(n, c?.value ?? null, !c?.unsure)}
-                style={{ marginLeft: "auto", height: 36, padding: "0 8px", borderRadius: 9, border: "1.5px solid #e2ddd2", font: "400 10px var(--mono)", cursor: "pointer",
+                style={{ marginLeft: "auto", height: 48, minWidth: 64, padding: "0 8px", borderRadius: 9, border: "1.5px solid #e2ddd2", font: "400 10px var(--mono)", cursor: "pointer",
                   background: c?.unsure ? "var(--ink)" : "transparent", color: c?.unsure ? "var(--paper)" : "var(--muted)", whiteSpace: "nowrap" }}>
                 {c?.unsure ? "not sure" : "sure"}
               </button>

@@ -98,6 +98,9 @@ export function derive(events: AppEvent[], sectionOf: (pieceId: string) => Secti
       case "level": d.level = Math.max(d.level, e.level); break;
       case "backup": d.lastBackup = e.ts; break;
       case "backup.offsite": d.offsiteAt = e.ts; break;
+      // A restore brings in another device's history: week plans are working copies, so they're
+      // rebuilt from the restored answers rather than kept from either device.
+      case "restored": d.weeks.clear(); break;
       case "admin": d.admin.set(e.piece, e); break;
     }
   }

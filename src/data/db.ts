@@ -28,9 +28,14 @@ function uuid() {
     : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
+// Events are read back in timestamp order, so two records in the same millisecond must not tie.
+let lastTs = 0;
+
 export async function record(body: EventBody): Promise<AppEvent> {
   const t = now();
-  const e = { ...body, id: uuid(), ts: t.getTime(), day: studyDay(t) } as AppEvent;
+  const ts = Math.max(t.getTime(), lastTs + 1);
+  lastTs = ts;
+  const e = { ...body, id: uuid(), ts, day: studyDay(new Date(ts)) } as AppEvent;
   await db.events.add(e);
   return e;
 }
@@ -84,6 +89,7 @@ export async function restoreBackup(b: unknown): Promise<{ added: number; total:
   const have = new Set(await db.events.toCollection().primaryKeys());
   const fresh = bk.events.filter((e) => !have.has(e.id));
   await db.events.bulkAdd(fresh);
+  if (fresh.length) await record({ type: "restored", added: fresh.length });
   return { added: fresh.length, total: bk.events.length };
 }
 

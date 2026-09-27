@@ -16,11 +16,14 @@ describe("test 12 · backup and restore", () => {
     expect(await allEvents()).toHaveLength(0);
     const r = await restoreBackup(backup);
     expect(r.added).toBe(before.length);
-    expect(await allEvents()).toEqual(before);
+    const history = async () => (await allEvents()).filter((e) => e.type !== "restored");
+    expect(await history()).toEqual(before);
+    // one note that a restore happened, so the week is rebuilt from the restored answers
+    expect((await allEvents()).filter((e) => e.type === "restored")).toHaveLength(1);
 
     // restoring the same file again adds nothing and changes nothing
     expect((await restoreBackup(backup)).added).toBe(0);
-    expect(await allEvents()).toEqual(before);
+    expect(await history()).toEqual(before);
   });
 
   it("every answer is written the moment it's entered", async () => {

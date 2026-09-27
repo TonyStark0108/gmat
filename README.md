@@ -11,14 +11,17 @@ the timer, the review and the cards. Spec: `docs/gmat-platform-spec.md` (source 
 | `src/core/` | Pure logic with tests: calendar, budgets, pieces, the week, the card, the mix, progress, marking |
 | `src/data/` | Storage (IndexedDB via Dexie, add-only event log), backup and restore |
 | `src/ui/` | Screens |
-| `tests/` | `npm test` |
+| `tests/` | `npm test`: the logic |
+| `e2e/` | `npm run e2e`: the Phase 1 checklist, done by a robot in Chromium |
 
 ## Commands
 
 ```
 npm run content   # rebuild data/ from the source files
 npm run dev       # development (loads data/ automatically; has the time machine)
-npm test
+npm test          # the logic, in seconds
+npm run e2e       # the whole app in a real browser: first run, offline, bus, backup and restore
+                  # (needs data/; writes e2e-report/album.html, a screenshot of every step)
 npm run build     # the version you install (no time machine, no content inside)
 ```
 

@@ -2,12 +2,13 @@
 // the author stands, then the questions beside the passage. Pauses after any passage; resumes exactly
 // there. The clock depends on the plan stage and never submits for you.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../../app/store";
 import { now } from "../../core/clock";
 import type { RcPassage, RcQuestion, RcSection } from "../../core/content";
 import { markSet } from "../../core/grid";
 import type { Piece } from "../../core/pieces";
+import type { AnswerRec } from "../../core/state";
 import { record } from "../../data/db";
 import { Back, Screen, useKeys } from "../bits";
 import { useFocus, useTaskTime } from "../focus";
@@ -45,7 +46,9 @@ function RcInner({ piece, onDone, section }: { piece: Piece; onDone: (l: Logged 
 
   const passage: RcPassage = section.passages[pi];
   const q: RcQuestion | undefined = passage.questions[qi];
-  const answers = d.answers.get(piece.id) ?? new Map();
+  const typedNow = useRef(new Map<string, AnswerRec>());
+  const [, bump] = useState(0);
+  const answers = new Map<string, AnswerRec>([...(d.answers.get(piece.id) ?? new Map<string, AnswerRec>()), ...typedNow.current]);
   const flags = d.rcFlags.get(piece.id) ?? new Map();
   const line = d.rcLines.get(passage.id) ?? "";
   const [lineDraft, setLineDraft] = useState(line);
@@ -56,7 +59,10 @@ function RcInner({ piece, onDone, section }: { piece: Piece; onDone: (l: Logged 
 
   async function choose(letter: string) {
     if (!q) return;
-    await record({ type: "answer", piece: piece.id, q: q.id, value: letter, unsure: false, sinceStartMs: now().getTime() - startedAt });
+    const sinceStartMs = now().getTime() - startedAt;
+    typedNow.current.set(q.id, { value: letter, unsure: false, sinceStartMs, ts: now().getTime() });
+    bump((x) => x + 1);
+    await record({ type: "answer", piece: piece.id, q: q.id, value: letter, unsure: false, sinceStartMs });
     time.poke();
   }
   async function cycleFlag() {

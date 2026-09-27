@@ -12,3 +12,5 @@ node_modules/
 GMAT study platform research.md
 GMAT Screens and Flows.pdf
 *.tsbuildinfo
+/e2e-report/
+/test-results/
