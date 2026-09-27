@@ -1,0 +1,33 @@
+{
+  "_about": "Parentheticals in the LSAT RC passages that the automatic rule could not decide. 'remove' = a dictionary note someone typed in; 'keep' = reads like the author's own words. Guesses by Claude, confirmed by the owner.",
+  "remove": [
+    "(having or giving style or distinction)",
+    "(the fauna and flora collectively)",
+    "(a fundamental or characteristic part or quality)",
+    "(a common feature or attribute)",
+    "(the enactments of a legislator or a legislative body)",
+    "(the arrangement and connection of words or groups of words in a sentence: syntactical arrangement)",
+    "(an exact copy)",
+    "(a forcible indoctrination to induce someone to give up basic political, social, or religious beliefs and attitudes and to accept contrasting regimented ideas)",
+    "(a benefit obtained at another's expense or without the usual cost or effort)",
+    "(a periodic wind especially in the Indian Ocean and southern Asia)",
+    "(a position from which one may assert or enforce legal rights and duties)",
+    "(marked by analytical reasoning)",
+    "(the quality or state of constituting a people)",
+    "(a member of a western division of the Dakota peoples)",
+    "(a conservative who is intolerant of opposing views)",
+    "(the region of the Earth's interior lying below the crust)"
+  ],
+  "keep": [
+    "(the dramatic moments, the frustrations, and the fears are clearly hers)",
+    "(the decision for or against the plaintiff and the essential grounds or legal reasons for it, that is, what subsequent judges are bound by)",
+    "(a rough shorthand term for Western political systems)",
+    "(the birth of new neurons)",
+    "(the region between the core and the crust)",
+    "(the amount of food produced through each unit of labor invested)",
+    "(the eldest son inheriting all)",
+    "(the Issei, Nisei, and Sansei)",
+    "(a widow's lifetime use of an amount of money specified in the marriage contract)",
+    "(\"channel flow diversion\")"
+  ]
+}

@@ -1,0 +1,14 @@
+# Content extracted from books and files you own: kept on the laptop, never published.
+data/
+sources/
+importer/.work/
+__pycache__/
+dist/
+node_modules/
+*.log
+
+# Personal planning documents stay on this laptop (the repository is public)
+docs/
+GMAT study platform research.md
+GMAT Screens and Flows.pdf
+*.tsbuildinfo
