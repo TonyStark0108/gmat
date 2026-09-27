@@ -76,7 +76,7 @@ a { color: var(--link); }
 .btn:disabled { opacity: .35; cursor: default; transform: none; }
 .btn.ghost { background: transparent; color: var(--faint); border: 1.5px solid var(--line-3); font-size: 18px; }
 .btn.outline { background: transparent; color: var(--ink); }
-.btn.small { height: 48px; font-size: 17px; }
+.btn.small { height: 48px; font: 400 17px var(--hand); }
 .btn.dashed { background: transparent; color: var(--faint); border: 1.5px dashed #b9b3aa; font-size: 16px; }
 
 .card {
@@ -122,12 +122,16 @@ a { color: var(--link); }
 .overlay { position: fixed; inset: 0; background: rgba(35, 33, 30, .35); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
 .toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 10px 18px; border-radius: 12px; font-size: 16px; animation: toast 3.2s ease both; z-index: 60; }
 
+/* Reading sets: the real exam's split screen, each side scrolling on its own. */
+.app.wide { height: calc(100vh - 48px); min-height: 0; }
+.app.wide .screen { min-height: 0; overflow: hidden; }
 .split { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 36px; flex: 1; min-height: 0; }
-.split > .left { overflow-y: auto; padding-right: 8px; }
-.split > .right { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+.split > .left { overflow-y: auto; padding-right: 12px; min-height: 0; }
+.split > .right { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; min-height: 0; padding-right: 4px; }
 @media (max-width: 900px) {
   .split { grid-template-columns: 1fr; }
-  .app.wide { max-width: 760px; }
+  .app.wide { max-width: 760px; height: auto; min-height: calc(100vh - 48px); }
+  .app.wide .screen { overflow: visible; }
 }
 @media (max-width: 640px) {
   .frame { padding: 0; }
