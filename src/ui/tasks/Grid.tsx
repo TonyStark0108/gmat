@@ -22,7 +22,7 @@ export function BookGrid({ piece, onDone, numbers, bookId, embedded, onSubmitted
   piece: Piece; onDone?: (l: Logged | null) => void;
   numbers?: [number, number]; bookId?: string; embedded?: boolean; onSubmitted?: () => void;
 }) {
-  const { content, d, pieces } = useApp();
+  const { content, d, pieces, m } = useApp();
   const focus = useFocus();
   const k = SUBJECT[piece.section];
   const book = (bookId ?? piece.task.pointer.book ?? "og") as keyof typeof BOOK_NAMES;
@@ -102,6 +102,7 @@ export function BookGrid({ piece, onDone, numbers, bookId, embedded, onSubmitted
         placeholder={`Type ${a}c, or ${a}cs for not sure, then Enter. A letter on its own answers the next one.`}
         style={{ height: 46, border: "1.5px solid var(--line-2)", borderRadius: 10, padding: "0 12px", font: "400 13px var(--mono)", background: "#fff" }} />
       {hint && <div className="small">{hint}</div>}
+      {m.adapt.carelessLeads && piece.group === "Q" && <div className="small">Check units and what's being asked.</div>}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(400px, 1fr))", gap: "6px 22px" }}>
         {nums.map((n) => {
           const c = cur(n);
@@ -167,7 +168,7 @@ export function BookGrid({ piece, onDone, numbers, bookId, embedded, onSubmitted
   );
 }
 
-function TwoPartPicker({ rows, value, color, onPick }: { rows: number; value: number[] | null; color: string; onPick: (v: number[]) => void }) {
+export function TwoPartPicker({ rows, value, color, onPick }: { rows: number; value: number[] | null; color: string; onPick: (v: number[]) => void }) {
   const [c1, c2] = value ?? [0, 0];
   const col = (which: 0 | 1) => (
     <div className="row" style={{ gap: 3 }}>

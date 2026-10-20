@@ -10,6 +10,7 @@ import { extraDeskFor, projectFinish } from "../core/week";
 import { record, restoreBackup, saveContent } from "../data/db";
 import { backupNow, folderSupported, pickFolder, readJsonFile, testFolderWrite } from "../data/backup";
 import { Back, Screen, useToast } from "./bits";
+import { Bookmarklet } from "./Share";
 
 export const setSetting = (patch: Partial<S>) => record({ type: "settings", patch });
 
@@ -167,6 +168,12 @@ export function SettingsScreen() {
         <div className="title">Settings</div>
         <div className="eyebrow">Your dates and time</div>
         <DateFields showMore />
+        <div className="eyebrow" style={{ marginTop: 10 }}>The test</div>
+        <Field label="Booked test date">
+          <input type="date" value={s.testDate ?? ""} onChange={(e) => void record({ type: "booking", answer: "booked", date: e.target.value })} />
+          {s.testDate && <button className="tiny back" onClick={() => void setSetting({ testDate: null })}>not booked</button>}
+        </Field>
+        <div className="tiny" style={{ padding: "4px 0" }}>Fill this in once you've booked. Until then there's no test date anywhere in the app.</div>
         <div className="eyebrow" style={{ marginTop: 10 }}>Focus and break</div>
         <Field label="Focus">
           <select value={s.focusMin} onChange={(e) => void setSetting({ focusMin: Number(e.target.value) })}>{[25, 40, 50, 60, 75].map((m) => <option key={m} value={m}>{m} min</option>)}</select>
@@ -176,6 +183,10 @@ export function SettingsScreen() {
         </Field>
         <Field label="Sunday note"><button className="toggle" onClick={() => void setSetting({ sundayNote: !s.sundayNote })}>{s.sundayNote ? "on" : "off"}</button></Field>
 
+        <div className="eyebrow" style={{ marginTop: 10 }}>Cards</div>
+        <button className="btn small ghost" style={{ alignSelf: "flex-start" }} onClick={() => go("/cards/manage")}>Your cards: edit, pause or delete</button>
+        <div className="eyebrow" style={{ marginTop: 10 }}>Send to GMAT app</div>
+        <Bookmarklet />
         <div className="eyebrow" style={{ marginTop: 10 }}>Backup</div>
         <div className="small">{d.lastBackup ? `Last backup: ${new Date(d.lastBackup).toLocaleString()}` : "No backup yet."}</div>
         <div className="row wrap">

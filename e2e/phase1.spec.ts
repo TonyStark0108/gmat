@@ -95,6 +95,19 @@ test("the Phase 1 checklist, end to end", async () => {
   await settled(page);
   await page.keyboard.press("w");
   await page.getByRole("button", { name: /OG problem solving, first half/ }).click();
+  // the one-time book check, the first time a section of the printed OG comes up
+  await expect(page.getByText("Which edition is printed on your OG's cover?")).toBeVisible();
+  await snap(page, "Before the first book set, once: the edition on the cover.");
+  await page.getByRole("button", { name: "2025–2026" }).click();
+  await expect(page.getByText(/In your book, question 1 is on page/)).toBeVisible();
+  await page.getByRole("button", { name: "Next" }).click();
+  for (let i = 0; i < 3; i++) {
+    await expect(page.getByText(/Open your book.s answer key: is question \d+ answer [A-E]\?/)).toBeVisible();
+    await page.getByRole("button", { name: "Yes", exact: true }).click();
+  }
+  await expect(page.getByText("Your book and the answer key agree.")).toBeVisible();
+  await snap(page, "Three spot checks against the book's own key: they agree, so this section is marked for you.");
+  await page.getByRole("button", { name: "Start the set" }).click();
   await expect(page.getByText("0 of 12 entered")).toBeVisible();
   for (const a of ["1b", "2cs", "d", "4a", "5e", "6c"]) await typeAnswer(page, a);
   await expect(page.getByText("6 of 12 entered")).toBeVisible();

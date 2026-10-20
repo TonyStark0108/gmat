@@ -48,16 +48,20 @@ export async function jumpTo(ctx: BrowserContext, page: Page, when: Date) {
 // ---- the photo album of a run
 const shots: { file: string; caption: string; step: string }[] = [];
 let step = "";
+let prefix = "";
 export const setStep = (s: string) => { step = s; };
+export const setPrefix = (p: string) => { prefix = p; };
 export async function snap(page: Page, caption: string) {
   fs.mkdirSync(path.join(OUT, "shots"), { recursive: true });
-  const file = `shots/${String(shots.length + 1).padStart(2, "0")}.png`;
+  const file = `shots/${prefix}${String(shots.length + 1).padStart(2, "0")}.png`;
   await page.waitForTimeout(450);   // let the screen's rise animation finish
   await page.screenshot({ path: path.join(OUT, file) });
   shots.push({ file, caption, step });
 }
 
-export function writeAlbum(title: string, ok: boolean, notes: string[]) {
+export function resetAlbum() { shots.length = 0; }
+
+export function writeAlbum(title: string, ok: boolean, notes: string[], fileName = "album.html") {
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
   let html = `<!doctype html><meta charset="utf-8"><title>${esc(title)}</title>
 <style>body{font:16px system-ui;background:#ebe8e2;color:#23211e;max-width:1100px;margin:0 auto;padding:24px}
@@ -72,7 +76,7 @@ ${notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}`;
     html += `<figure><img src="data:image/png;base64,${data}" loading="lazy"><figcaption>${esc(s.caption)}</figcaption></figure>`;
   }
   fs.mkdirSync(OUT, { recursive: true });
-  fs.writeFileSync(path.join(OUT, "album.html"), html);
+  fs.writeFileSync(path.join(OUT, fileName), html);
 }
 
 export async function eventCount(page: Page): Promise<number> {

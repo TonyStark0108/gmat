@@ -23,7 +23,9 @@ export interface Piece {
   deskOnly: boolean;
   busOk: boolean;
   offlineOk: boolean;
+  busOnly?: boolean;      // "keep the date, do what fits": reading and CR ride the bus
   last: boolean;
+  extra?: boolean;        // outside the plan (top-ups, redos, extra practice): never in % done
 }
 
 export function groupOf(section: Section): Group {
@@ -35,11 +37,14 @@ export function planTasks(content: Content, settings: Settings): Task[] {
   return content.plan.tasks.filter((t) => t.optional !== "setting" || (t.setting === "practice_run_week1" && settings.practiceRun));
 }
 
-function busRules(t: Task, s: Settings) {
+function busRules(t: Task, s: Settings): { deskOnly: boolean; busOk: boolean; busOnly?: boolean } {
+  let r = { deskOnly: t.needs_desk, busOk: t.bus_ok };
   if (t.bus_switch === "verbal_review_on_bus") {
-    return s.verbalReviewOnBus ? { deskOnly: false, busOk: true } : { deskOnly: true, busOk: false };
+    r = s.verbalReviewOnBus ? { deskOnly: false, busOk: true } : { deskOnly: true, busOk: false };
   }
-  return { deskOnly: t.needs_desk, busOk: t.bus_ok };
+  // Well past safe, "do what fits": mocks, DI and quant keep the desk; reading and CR move to the bus.
+  if (s.fitMode && (t.section === "rc" || t.section === "cr") && r.busOk) return { deskOnly: false, busOk: true, busOnly: true };
+  return r;
 }
 
 export function toPieces(tasks: Task[], s: Settings): Piece[] {
@@ -49,7 +54,7 @@ export function toPieces(tasks: Task[], s: Settings): Piece[] {
     const splits = t.kind === "og_set" || (t.kind === "gmatclub_set" && !t.timed) ? t.break_points ?? null : null;
     const parts = splits && splits.length > 1 ? splits : [null];
     const total = t.pointer.count ?? 0;
-    const { deskOnly, busOk } = busRules(t, s);
+    const { deskOnly, busOk, busOnly } = busRules(t, s);
     parts.forEach((bp, i) => {
       let share = 1 / parts.length;
       if (bp?.numbers && total) share = (bp.numbers[1] - bp.numbers[0] + 1) / total;
@@ -71,6 +76,7 @@ export function toPieces(tasks: Task[], s: Settings): Piece[] {
         deskOnly,
         busOk,
         offlineOk: t.offline_ok || t.pointer.book === "vr",
+        busOnly,
         last: i === parts.length - 1,
       });
     });

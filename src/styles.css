@@ -139,6 +139,8 @@ a { color: var(--link); }
   .screen { padding: 18px 16px 22px; }
 }
 
+.pulse { display: inline-block; animation: pulse 1.4s cubic-bezier(.2, .8, .3, 1); }
+@keyframes pulse { 0% { transform: scale(1) } 30% { transform: scale(1.35) } 100% { transform: scale(1) } }
 @keyframes rise { from { opacity: 0; transform: translateY(14px) } to { opacity: 1; transform: none } }
 @keyframes fill { from { transform: scaleX(0) } to { transform: scaleX(1) } }
 @keyframes pop { 0% { transform: scale(.4); opacity: 0 } 60% { transform: scale(1.12); opacity: 1 } 100% { transform: scale(1); opacity: 1 } }

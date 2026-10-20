@@ -2,7 +2,8 @@
 // the exact pointer, how many questions, about how long, and where it happens.
 // Tone rules: no "behind", "overdue", "missed", "should", "must", "still", "only".
 
-import { BOOK_NAMES, type Content, type Section } from "../core/content";
+import { BOOK_NAMES, pagesFor, type Content, type Section } from "../core/content";
+export { pagesFor };
 import type { Piece } from "../core/pieces";
 
 export const SUBJECT: Record<Section, { name: string; c: string; t: string; d: string }> = {
@@ -37,12 +38,6 @@ export function titleOf(p: Piece): string {
   }
 }
 
-/** Printed pages for a range of questions, from the book's own index. */
-export function pagesFor(content: Content | null, book: string, a: number, b: number): [number, number] | null {
-  const qs = content?.book_keys.books[book as keyof Content["book_keys"]["books"]]?.questions ?? [];
-  const pages = qs.filter((q) => q.n >= a && q.n <= b && q.page).map((q) => q.page!) ;
-  return pages.length ? [Math.min(...pages), Math.max(...pages)] : null;
-}
 
 export function pointerOf(p: Piece, content: Content | null = null): string {
   const t = p.task, ptr = t.pointer;

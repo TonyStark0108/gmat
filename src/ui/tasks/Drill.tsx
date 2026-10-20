@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { useApp } from "../../app/store";
+import { DRILL_GOES, drillGoes, drillTopic } from "../../core/extras";
 import type { Piece } from "../../core/pieces";
 import { record } from "../../data/db";
 import { Back, Screen, openOut, useKeys } from "../bits";
@@ -21,7 +22,9 @@ export function Drill({ piece, onDone }: { piece: Piece; onDone: (l: Logged | nu
   const [right, setRight] = useState("");
   const [total, setTotal] = useState(String(target?.count ?? 10));
   const time = useTaskTime(piece.id, "desk", "drill");
-  const goes = d.drills.get(piece.id)?.length ?? 0;
+  // repeats are their own chips; the goes are counted across them
+  const baseTask = piece.extra ? piece.taskId.split(":")[2] : piece.taskId;
+  const goes = drillGoes(d, baseTask).length;
 
   useEffect(() => {
     if (!running) return;
@@ -40,7 +43,13 @@ export function Drill({ piece, onDone }: { piece: Piece; onDone: (l: Logged | nu
     await record({ type: "piece.done", piece: piece.id });
     time.flush();
     focus.boundary(0, true);
-    onDone({ toLookAgain: 0, firstHalf: false, note: met ? "Target reached." : target ? "It comes back at your next desk session until the target's reached." : undefined });
+    const last = goes + 1 >= DRILL_GOES;
+    const topic = drillTopic(piece.task);
+    onDone({
+      toLookAgain: 0, firstHalf: false,
+      note: met ? "Target reached." : !target ? undefined : last ? "That's four goes. Repeating one sheet stops helping, so the topic gets a top-up instead." : "It comes back at your next desk session until the target's reached.",
+      offer: !met && target && last ? { id: `topup:drill:${baseTask}`, topic, section: "quant", wrong: t - r, total: t, cause: "process", line: "" } : undefined,
+    });
   }
 
   return (

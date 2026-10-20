@@ -3,6 +3,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../../app/store";
+import { otherVideo, videoGone, videoNoEmbed } from "../../core/links";
 import type { Piece } from "../../core/pieces";
 import { record } from "../../data/db";
 import { Back, Screen, openOut } from "../bits";
@@ -29,20 +30,26 @@ function loadApi(): Promise<void> {
 }
 
 export function Video({ piece, onDone }: { piece: Piece; onDone: (l: Logged | null) => void }) {
-  const { d, online, bus } = useApp();
+  const { d, online, bus, content } = useApp();
   const focus = useFocus();
   const k = SUBJECT[piece.section];
-  const ptr = piece.task.pointer;
+  // A video the weekly check found gone plays its stand-in from the same plan week and section;
+  // one that can't be embedded opens on YouTube (spec: Links, fallbacks by link type).
+  const checked = d.videoChecks.get(piece.task.pointer.youtube_id ?? "")?.status ?? 200;
+  const gone = videoGone(checked) || d.deadLinks.has(piece.task.pointer.url ?? "~");
+  const alt = gone && content ? otherVideo(content, piece.task, d) : null;
+  const ptr = alt ? alt.pointer : piece.task.pointer;
+  const noEmbed = videoNoEmbed(d.videoChecks.get(ptr.youtube_id ?? "")?.status ?? 200);
   const host = useRef<HTMLDivElement>(null);
   const player = useRef<YTPlayer | null>(null);
-  const [state, setState] = useState<"loading" | "ready" | "gone" | "offline">(online ? "loading" : "offline");
+  const [state, setState] = useState<"loading" | "ready" | "gone" | "offline">(!online ? "offline" : noEmbed ? "gone" : "loading");
   const [watched, setWatched] = useState(false);
   const [line, setLine] = useState("");
   const saved = d.video.get(piece.id);
   const playedMs = useRef(0);
 
   useEffect(() => {
-    if (!online || !ptr.youtube_id) return;
+    if (!online || !ptr.youtube_id || noEmbed) return;
     let alive = true;
     loadApi().then(() => {
       if (!alive || !host.current || !window.YT) return;
@@ -89,7 +96,7 @@ export function Video({ piece, onDone }: { piece: Piece; onDone: (l: Logged | nu
   }
 
   async function finish() {
-    if (line.trim()) await record({ type: "line", source: `video:${piece.id}`, text: line.trim() });
+    if (line.trim()) await record({ type: "line", source: `video:${piece.id}`, text: line.trim(), front: piece.task.title ?? "After the video", section: piece.section });
     await record({ type: "piece.done", piece: piece.id });
     flush();
     focus.boundary(0, true);
@@ -102,7 +109,14 @@ export function Video({ piece, onDone }: { piece: Piece; onDone: (l: Logged | nu
       <div className="eyebrow" style={{ color: k.d }}>{k.name} · video</div>
       <div style={{ fontSize: 25, lineHeight: 1.15 }}>{piece.task.title}</div>
       {state === "offline" && <div className="note"><div style={{ fontSize: 18 }}>Videos need signal. It's here when you have some.</div></div>}
-      {state === "gone" && <div className="note"><div style={{ fontSize: 18 }}>This video won't play here, so it opened on YouTube instead.</div></div>}
+      {alt && <div className="small">The original video is gone, so this one from the same week stands in: {alt.title}.</div>}
+      {state === "gone" && (
+        <div className="note">
+          <div style={{ fontSize: 18 }}>This video won't play here. It opens on YouTube instead.</div>
+          <button className="btn small outline" onClick={() => openOut(ptr.url ?? `https://www.youtube.com/watch?v=${ptr.youtube_id}`)}>Open on YouTube ↗</button>
+          <button className="back" onClick={() => setWatched(true)}>I've watched it</button>
+        </div>
+      )}
       <div style={{ position: "relative", width: "100%", aspectRatio: "16 / 9", background: "#000", borderRadius: 14, overflow: "hidden", display: state === "offline" ? "none" : "block" }}>
         <div ref={host} style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} />
       </div>

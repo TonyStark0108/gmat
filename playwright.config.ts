@@ -1,5 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
+process.env.TZ = "Asia/Kolkata";   // the simulated student's clock matches the browser's
+
 // End-to-end tests: the installable build, driven in a real Chromium the way you'd use it.
 // They need the study file (data/gmat-content-v1.json), so they run on the laptop, not on GitHub.
 export default defineConfig({

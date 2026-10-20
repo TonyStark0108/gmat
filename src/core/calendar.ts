@@ -1,6 +1,6 @@
 // Days, weeks, slots and how much time each holds. All local time.
 
-import { PLAN_SHARE, WEEK_CAP_MIN, type Settings } from "./settings";
+import { LIGHT_WEEK_BUS_MIN, PLAN_SHARE, WEEK_CAP_MIN, type LifeBlock, type Settings } from "./settings";
 
 const DAY_MS = 86_400_000;
 // A session that starts late on Sunday still belongs to that week until 4:00 on Monday.
@@ -47,12 +47,26 @@ export function inPause(day: string, s: Settings): boolean {
   return s.pauses.some((p) => day >= p.from && day <= p.to);
 }
 
+export function lifeOn(day: string, s: Settings): LifeBlock["mode"] | null {
+  for (const b of s.life ?? []) if (day >= b.from && day <= b.to) return b.mode;
+  return null;
+}
+
+/** A week turned into a light bus week by "something came up → a whole week". */
+export function isLightWeek(weekStart: string, s: Settings): boolean {
+  for (let i = 0; i < 7; i++) if (lifeOn(ymd(addDays(parseYmd(weekStart), i)), s) === "light") return true;
+  return false;
+}
+
 export interface DayCapacity { desk: number; bus: number }
 
 /** Raw minutes of desk and bus time on a day (before the 85% plan share). */
 export function dayCapacity(day: string, s: Settings, busMinutes = s.busMinutesPerWeekday): DayCapacity {
   if (day < s.startDate || inPause(day, s)) return { desk: 0, bus: 0 };
   const wd = parseYmd(day).getDay();
+  const life = lifeOn(day, s);
+  if (life === "off") return { desk: 0, bus: 0 };
+  if (life === "light") return { desk: 0, bus: wd >= 1 && wd <= 5 ? LIGHT_WEEK_BUS_MIN / 5 : 0 };
   let desk = 0;
   if (s.saturday.enabled && s.saturday.days.includes(wd)) desk += minutesOf(s.saturday.end) - minutesOf(s.saturday.start);
   if (s.mornings.days.includes(wd)) desk += minutesOf(s.mornings.end) - minutesOf(s.mornings.start);
@@ -84,7 +98,7 @@ export interface SlotNow { kind: SlotKind; endsAt: Date; minutesLeft: number }
 /** Is this moment inside one of the desk slots? */
 export function slotAt(t: Date, s: Settings): SlotNow | null {
   const day = ymd(t);
-  if (day < s.startDate || inPause(day, s)) return null;
+  if (day < s.startDate || inPause(day, s) || lifeOn(day, s)) return null;
   const wd = t.getDay();
   const mins = t.getHours() * 60 + t.getMinutes();
   const check = (slot: { days: number[]; start: string; end: string }, kind: SlotKind): SlotNow | null => {
@@ -107,12 +121,23 @@ export function isLateNight(t: Date, s: Settings): boolean {
 export function nextDeskSlot(t: Date, s: Settings, withinDays = 14): { day: string; kind: SlotKind } | null {
   for (let i = 1; i <= withinDays; i++) {
     const day = ymd(addDays(t, i));
-    if (day < s.startDate || inPause(day, s)) continue;
+    if (day < s.startDate || inPause(day, s) || lifeOn(day, s)) continue;
     const wd = parseYmd(day).getDay();
     if (s.mornings.days.includes(wd)) return { day, kind: "morning" };
     if (s.saturday.enabled && s.saturday.days.includes(wd)) return { day, kind: "saturday" };
   }
   return null;
+}
+
+/** The Sunday of the study week a day belongs to. */
+export function weekEndOf(day: string): string {
+  const d = parseYmd(day);
+  const fwd = (7 - d.getDay()) % 7;
+  return ymd(addDays(d, fwd));
+}
+
+export function plusDays(day: string, n: number): string {
+  return ymd(addDays(parseYmd(day), n));
 }
 
 export const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];

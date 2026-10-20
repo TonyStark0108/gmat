@@ -1,61 +1,41 @@
-// Home: the level line, % with hours under it, weeks done and errors retired, then one card with
-// Start and Skip (spec: Progress; How the app decides what's on the card).
+// Home: the level line, % with hours under it, weeks done and errors retired, at most one note, then
+// one card with Start and Skip (spec: Progress; How the app decides what's on the card).
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { go } from "../app/router";
 import { useApp } from "../app/store";
-import { chooseCard, fitsNow, pickFromMix, type Card, type CardCtx } from "../core/card";
-import { longDate, slotAt } from "../core/calendar";
+import { alternativeFor, chooseCard, type Card } from "../core/card";
+import { longDate } from "../core/calendar";
 import type { MixChoice } from "../core/events";
-import { MIX_NAMES, recommendMix, sectionOfMix, type MixSection } from "../core/mix";
+import { inWords } from "../core/grid";
+import { moveMockDay } from "../core/mocks";
+import { MIX_NAMES } from "../core/mix";
+import { cardContext } from "../core/model";
 import type { Piece } from "../core/pieces";
-import { hoursLogged, levelView, percentDone, weeksInARow } from "../core/progress";
-import { studyDaysLeft } from "../core/weekly";
+import { hoursLogged, levelView, weeksInARow } from "../core/progress";
 import { record } from "../data/db";
 import { Screen, openOut, useKeys, useToast } from "./bits";
 import { SUBJECT, metaOf, pointerOf, titleOf, whereOf } from "./copy";
 import { useFocus } from "./focus";
-import { BackupNote } from "./Settings";
+import { NoteStack } from "./Notes";
 
 const MBA_URL = "https://www.mba.com/";   // link catalogue L153
 
+export function useCardCtx() {
+  const { m, bus, online } = useApp();
+  return useMemo(() => cardContext(m, { bus, online }), [m, bus, online]);
+}
+
 export function Home() {
   const a = useApp();
-  const { d, today, pieces, week, bus } = a;
+  const { m, d, today, week, bus } = a;
   const focus = useFocus();
   const [toast, say] = useToast();
-  const [skipFor, setSkipFor] = useState<{ skipped: Piece; alt: Piece | null } | null>(null);
-
-  // ----- today's mix and its recommendation
-  const rec = useMemo(() => {
-    const remaining: Record<MixSection, number> = { quant: 0, verbal: 0, di: 0 };
-    for (const c of week?.chips ?? []) {
-      const p = a.byId.get(c.pieceId);
-      const m = p && sectionOfMix(p.section);
-      if (p && m && !d.done.has(p.id)) remaining[m] += p.minutes;
-    }
-    const seen = (s: string) => d.lastSeen.get(s as never) ?? null;
-    const maxDay = (x: string | null, y: string | null) => (x && y ? (x > y ? x : y) : x ?? y);
-    const earlier = [...d.mixByDay.entries()].filter(([day]) => day < today).sort((x, y) => (x[0] < y[0] ? 1 : -1))[0];
-    return recommendMix({
-      today, remaining, studyDaysLeft: studyDaysLeft(today, d.settings),
-      waiting: { quant: { redos: 0, topUp: false }, verbal: { redos: 0, topUp: false }, di: { redos: 0, topUp: false } },
-      lastSeen: { quant: seen("quant"), di: seen("di"), verbal: maxDay(seen("rc"), seen("cr")) },
-      lastSessionChoice: earlier ? { day: earlier[0], choice: earlier[1] } : null,
-      planStarted: d.settings.startDate, minutesToday: d.timechipByDay.get(today) ?? null,
-    });
-  }, [week, d, today, a.byId]);
-  const chosen: MixChoice = d.mixByDay.get(today) ?? rec.choice;
-
-  const ctx: CardCtx = {
-    now: a.now, today, settings: d.settings, pieces, byId: a.byId, week, d, bus, online: a.online,
-    mix: chosen, first: chosen === "mix" ? rec.first : undefined, timeBudget: d.timechipByDay.get(today) ?? null,
-  };
+  const [skipFor, setSkipFor] = useState<{ skipped: Piece | null; alt: Piece | null } | null>(null);
+  const { ctx, rec, chosen } = useCardCtx();
   const card = chooseCard(ctx);
 
-  // ----- numbers
-  const lv = levelView(Math.max(d.level), pieces, d.done);
-  const pct = percentDone(pieces, d.done);
+  const lv = levelView(m.level, m.plan, d.done);
   const inRow = weeksInARow(d.counted, week?.weekStart ?? today);
 
   async function start(p: Piece) {
@@ -64,32 +44,50 @@ export function Home() {
     if (!bus) focus.startSitting();
     go(`/task/${encodeURIComponent(p.id)}`);
   }
-
-  function altFor(p: Piece): Piece | null {
-    const slot = bus ? null : slotAt(a.now, d.settings);
-    const skippedToday = d.skipsByDay.get(today) ?? new Set();
-    const cands = (week?.chips ?? []).map((c) => a.byId.get(c.pieceId)!).filter((x) =>
-      x && x.id !== p.id && !d.done.has(x.id) && !skippedToday.has(x.id) && x.section !== p.section && x.task.kind !== "mock" && fitsNow(x, ctx, slot));
-    return cands.length ? pickFromMix(cands, ctx, p.group) : null;
+  async function startMixed(items: { id: string }[]) {
+    const id = `mixed:${Date.now().toString(36)}`;
+    await record({ type: "review.started", review: id, items: items.map((x) => x.id) });
+    if (!bus) focus.startSitting();
+    go(`/review/${encodeURIComponent(id)}`);
+  }
+  async function skip(id: string, p: Piece | null) {
+    await record({ type: "skip", piece: id });
+    setSkipFor({ skipped: p, alt: p ? alternativeFor(p, ctx) : null });
   }
 
-  async function skip(p: Piece) {
-    await record({ type: "skip", piece: p.id });
-    setSkipFor({ skipped: p, alt: altFor(p) });
-  }
-
-  const cardPiece = card.kind === "task" || card.kind === "resume" || card.kind === "mock" ? card.piece : null;
+  const primary = (): (() => void) | null => {
+    switch (card.kind) {
+      case "task": case "resume": case "mock": case "redo": return () => void start(card.piece);
+      case "review": return () => go(`/review/${encodeURIComponent(card.set.id)}`);
+      case "resumeReview": return () => go(`/review/${encodeURIComponent(card.review)}`);
+      case "mixed": return () => void startMixed(card.items);
+      case "cards": case "back": return () => { if (card.kind === "back") void record({ type: "seen", what: `back:${today}` }); go("/cards"); };
+      default: return null;
+    }
+  };
   useKeys({
-    Enter: () => { if (skipFor) return; if (cardPiece) void start(cardPiece); },
-    s: () => { if (cardPiece && card.kind === "task") void skip(cardPiece); },
+    Enter: () => { if (skipFor) return; primary()?.(); },
+    s: () => {
+      if (card.kind === "task") void skip(card.piece.id, card.piece);
+      else if (card.kind === "review") void skip(card.set.id, null);
+      else if (card.kind === "mixed") void skip("mixed", null);
+    },
     b: () => void record({ type: "bus", on: !bus }),
     w: () => go("/week"),
-  }, [cardPiece?.id, bus, skipFor]);
+  }, [card, bus, skipFor]);
+
+  // the retired count is the only number that animates
+  const lastRetired = useRef(m.reviews.retired);
+  const [pulse, setPulse] = useState(false);
+  useEffect(() => {
+    if (m.reviews.retired > lastRetired.current) { setPulse(true); const t = setTimeout(() => setPulse(false), 1600); lastRetired.current = m.reviews.retired; return () => clearTimeout(t); }
+    lastRetired.current = m.reviews.retired;
+  }, [m.reviews.retired]);
 
   return (
-    <Screen right={week ? `plan week ${cardPiece?.planWeek ?? ""}`.trim() : ""}>
+    <Screen right={card.kind === "task" || card.kind === "resume" ? `plan week ${card.piece.planWeek || ""}`.trim() : ""}>
       <div className="column">
-        <button onClick={() => go("/week")} style={{ all: "unset", cursor: "pointer", display: "flex", flexDirection: "column", gap: 6 }}>
+        <button onClick={() => go("/progress")} style={{ all: "unset", cursor: "pointer", display: "flex", flexDirection: "column", gap: 6 }} title="The journey">
           <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
             <span style={{ fontSize: 16 }}>{lv.label}</span><span className="tiny" style={{ fontSize: 10 }}>{lv.next}</span>
           </div>
@@ -98,25 +96,28 @@ export function Home() {
 
         <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
           <div>
-            <div style={{ fontSize: 66, lineHeight: 0.9 }}>{pct}%</div>
+            <div style={{ fontSize: 66, lineHeight: 0.9 }}>{m.pct}%</div>
             <div className="small" style={{ marginTop: 4 }}>{hoursLogged(d)} hours</div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 7 }}>
             <div style={{ fontSize: 17, color: "var(--ink-2)" }}>{d.counted.size} {d.counted.size === 1 ? "week" : "weeks"}{inRow >= 2 ? ` · ${inRow} in a row` : ""}</div>
-            <div className="row" style={{ gap: 8 }}>
+            <button className="row" style={{ all: "unset", cursor: "pointer", display: "flex", gap: 8, alignItems: "center" }} onClick={() => go("/errors")} title="What to work on">
               <span className="dot" style={{ width: 7, height: 7, background: "var(--rc)", animation: "breathe 4.6s ease-in-out infinite" }} />
-              <span style={{ fontSize: 19, color: "var(--rc-d)" }}>0 retired</span>
-            </div>
+              <span className={pulse ? "pulse" : undefined} style={{ fontSize: 19, color: "var(--rc-d)" }}>{m.reviews.retired} retired</span>
+            </button>
           </div>
         </div>
 
-        <BackupNote />
+        <NoteStack />
 
         {!bus && card.kind === "task" && (
           <MixSwitch chosen={chosen} rec={rec.choice} reason={d.mixByDay.has(today) ? null : rec.reason} />
         )}
 
-        <CardView card={card} onStart={start} onSkip={skip} />
+        <CardView card={card} onPrimary={primary()} onSkip={
+          card.kind === "task" ? () => void skip(card.piece.id, card.piece)
+            : card.kind === "review" ? () => void skip(card.set.id, null)
+              : card.kind === "mixed" ? () => void skip("mixed", null) : undefined} />
 
         {skipFor && (
           <div className="note">
@@ -145,10 +146,16 @@ export function Home() {
           ) : (
             <button className="btn small outline" style={{ width: 110, borderColor: "var(--rc)", color: "var(--rc-d)" }} onClick={() => void record({ type: "bus", on: true })} title="B">Bus</button>
           )}
+          {m.busChip && !bus && (
+            <button className="chip" style={{ border: "1.5px dashed var(--rc)", color: "var(--rc-d)" }} onClick={() => void record({ type: "bus", on: true })}>On the bus?</button>
+          )}
           <div className="spacer" />
+          <button className="back" onClick={() => go("/life")}>Something came up</button>
         </div>
         <nav className="row" style={{ justifyContent: "space-between", borderTop: "1.5px solid var(--line)", paddingTop: 4 }}>
           <NavLink to="/week" label="This week" />
+          <NavLink to="/progress" label="Progress" />
+          <NavLink to="/errors" label="What to work on" />
           <NavLink to="/settings" label="Settings" />
           {import.meta.env.DEV && <NavLink to="/dev" label="Time machine" />}
         </nav>
@@ -187,15 +194,20 @@ function MixSwitch({ chosen, rec, reason }: { chosen: MixChoice; rec: MixChoice;
   );
 }
 
-function CardView({ card, onStart, onSkip }: { card: Card; onStart: (p: Piece) => void; onSkip: (p: Piece) => void }) {
+interface View {
+  col: string; t: string; dk: string; eb: string; title: string; ptr?: string; meta?: string; body?: string; where?: string;
+  start?: string; skip?: string; onStart?: () => void; onSkip?: () => void; prog?: { w: number; t: string }; next?: string; time?: boolean;
+  border?: string; second?: { label: string; run: () => void };
+}
+
+function CardView({ card, onPrimary, onSkip }: { card: Card; onPrimary: (() => void) | null; onSkip?: () => void }) {
   const a = useApp();
-  const { d, today } = a;
+  const { d, today, m } = a;
   const timechip = d.timechipByDay.get(today) ?? null;
   const cycleTime = () => void record({ type: "timechip", minutes: timechip === null ? 30 : timechip === 30 ? 60 : null });
-
-  let v: { col: string; t: string; dk: string; eb: string; title: string; ptr?: string; meta?: string; body?: string; where?: string;
-    start?: string; skip?: string; onStart?: () => void; onSkip?: () => void; prog?: { w: number; t: string }; next?: string; time?: boolean };
   const neutral = { col: "var(--gen)", t: "var(--gen-t)", dk: "var(--gen-d)" };
+  const cardsK = { col: "var(--rc)", t: "var(--rc-t)", dk: "var(--rc-d)" };
+  let v: View;
 
   switch (card.kind) {
     case "warmup":
@@ -210,10 +222,30 @@ function CardView({ card, onStart, onSkip }: { card: Card; onStart: (p: Piece) =
       v = { ...neutral, eb: "Pause week", title: "Nothing on the plan this week.", body: "Rest counts." };
       break;
     case "late":
-      v = { ...neutral, eb: "Late", title: "Nothing tonight.", body: "Sleep does more for tomorrow than another set." };
+      v = { ...neutral, eb: "Tonight", title: "Nothing tonight.", body: card.moved ? "Tomorrow's redo moved a day. Sleep does more for it than another hour tonight." : "Sleep does more for tomorrow than another set." };
       break;
+    case "back":
+      v = { ...cardsK, eb: "Welcome back", title: "Back. That's the whole game.", body: "A few cards to warm up, then the next thing on the plan.", where: "reads here", start: "Cards" };
+      break;
+    case "end": {
+      const lines: Record<typeof card.phase, [string, string | undefined]> = {
+        checklist: ["The test-day checklist.", "Your ID (your passport), the centre's address and how you'll get there, the start time, and arriving 30 minutes early."],
+        cardsonly: ["Cards, if you want them.", undefined],
+        daybefore: ["Nothing today. Sleep does the rest.", undefined],
+        testday: ["Today's the test. Nothing else is on here.", undefined],
+        after: ["How did it go?", undefined],
+      };
+      v = { ...neutral, eb: "The test", title: lines[card.phase][0], body: lines[card.phase][1] };
+      if (card.phase === "checklist" && !d.seen.has("checklist")) v = { ...v, start: "Done", onStart: () => void record({ type: "seen", what: "checklist" }) };
+      if (card.phase === "after") return <AfterTest />;
+      break;
+    }
     case "weekdone":
-      v = { ...neutral, eb: "This week", title: "The week is done.", body: "Rest counts." };
+      v = { ...neutral, eb: "This week", title: "The week is done.", body: "Cards, or rest. Rest counts.", start: m.cards.length ? "Cards" : undefined, onStart: () => go("/cards") };
+      break;
+    case "cards":
+      v = { ...cardsK, eb: card.why === "late" ? "Tonight" : "Cards", title: card.why === "late" ? "Cards, or nothing tonight." : card.why === "fallback" ? "Nothing else fits right now. Cards do." : "Cards",
+        ptr: "10–15 cards", meta: "about 10 minutes", where: "reads here", start: "Start", border: "2px dashed var(--rc)" };
       break;
     case "nothing":
       v = { ...neutral, eb: "Right now",
@@ -221,21 +253,49 @@ function CardView({ card, onStart, onSkip }: { card: Card; onStart: (p: Piece) =
         body: card.why === "slotEnding" ? "The morning's nearly over. The next piece waits for more time."
           : card.why === "slot" ? "The next pieces need more time than this slot has. They're here at the next sitting." : undefined };
       break;
+    case "review": {
+      const s = card.set, k = SUBJECT[s.section];
+      const p = m.plan.find((x) => x.taskId === s.taskId)!;
+      v = { col: k.c, t: k.t, dk: k.d, eb: `${k.name} · review`, title: `The review: ${titleOf(p).replace(/, (first|second) half$/, "")}`,
+        ptr: s.path === "full" ? `${inWords(s.items.length)} to look at again, from scratch` : "The not-sure ones, then the official answers",
+        meta: `about ${s.minutes} minutes`, where: s.task.kind === "rc_section" ? "reads here" : s.task.kind === "cr_set" ? "opens GMAT Club" : "here, with the book",
+        start: "Start", skip: "Skip", border: `4px double ${k.c}` };
+      break;
+    }
+    case "resumeReview": {
+      const k = card.set ? SUBJECT[card.set.section] : SUBJECT.general;
+      const done = card.items.filter((it) => (d.attempts.get(it.id) ?? []).some((x) => x.review === card.review)).length;
+      v = { col: k.c, t: k.t, dk: k.d, eb: "Waiting where you left it", title: card.set ? "The review" : "Mixed review", start: "Carry on",
+        prog: { w: card.items.length ? done / card.items.length : 0, t: `${done} of ${card.items.length}` }, border: `4px double ${k.c}` };
+      break;
+    }
+    case "mixed": {
+      const n = card.items.length;
+      const k = SUBJECT[card.items[0].section];
+      v = { col: k.c, t: k.t, dk: k.d, eb: "Review", title: `${inWords(n)} ${n === 1 ? "question" : "questions"}, mixed.`,
+        ptr: card.returning ? `${inWords(card.returning)} you haven't seen in a while.` : undefined, meta: `about ${Math.max(5, n * 3)} minutes`,
+        where: card.items.some((it) => it.source === "book") ? "here, with the book" : "opens GMAT Club", start: "Start", skip: "Skip", border: `4px double ${k.c}` };
+      break;
+    }
     default: {
       const p = card.piece;
       const k = SUBJECT[p.section];
-      v = { col: k.c, t: k.t, dk: k.d, eb: card.kind === "resume" ? "Waiting where you left it" : card.kind === "mock" ? "Today · mock" : k.name,
-        title: titleOf(p), ptr: pointerOf(p, a.content) || undefined, meta: card.kind === "mock" ? "about 2 h 15 min" : metaOf(p), where: whereOf(p),
-        start: card.kind === "resume" ? "Carry on" : card.kind === "mock" ? "Open" : "Start", onStart: () => onStart(p),
-        skip: card.kind === "task" ? "Skip" : undefined, onSkip: card.kind === "task" ? () => onSkip(p) : undefined, time: card.kind === "task" };
+      const isMock = card.kind === "mock";
+      v = { col: k.c, t: k.t, dk: k.d, eb: card.kind === "resume" ? "Waiting where you left it" : isMock ? "Today · mock" : card.kind === "redo" ? `${k.name} · again` : k.name,
+        title: titleOf(p), ptr: pointerOf(p, a.content) || undefined, meta: isMock ? "about 2 h 15 min" : metaOf(p), where: whereOf(p),
+        start: card.kind === "resume" ? "Carry on" : isMock ? "Open" : "Start",
+        skip: card.kind === "task" ? "Skip" : undefined, time: card.kind === "task" };
+      if (isMock) v.second = { label: "Move it", run: () => void record({ type: "mock.moved", piece: p.id, day: moveMockDay(today, m.mocks[m.mocks.length - 1]?.day ?? null) }) };
       if (card.kind === "resume") v.prog = { w: card.progress.total ? card.progress.done / card.progress.total : 0, t: `${card.progress.done} of ${card.progress.total}` };
       if (card.kind === "task" && card.next) v.next = `Next: ${titleOf(card.next).replace(/^An? /, "")}.`;
+      if (card.kind === "task" && (p as { reason?: string }).reason) v.body = (p as { reason?: string }).reason;
     }
   }
+  const go1 = v.onStart ?? onPrimary ?? undefined;
 
   return (
     <>
-      <div className="card" style={{ boxShadow: `6px 6px 0 ${v.t}` }}>
+      <div className="card" style={{ boxShadow: `6px 6px 0 ${v.t}`, border: v.border }}>
         <div className="row" style={{ gap: 8 }}><span className="dot" style={{ background: v.col }} /><span className="eyebrow" style={{ color: v.dk }}>{v.eb}</span></div>
         <div className="t">{v.title}</div>
         {v.ptr && <div className="ptr" style={{ background: v.t }}>{v.ptr}</div>}
@@ -253,11 +313,45 @@ function CardView({ card, onStart, onSkip }: { card: Card; onStart: (p: Piece) =
           {v.time && <button className="pill dash" onClick={cycleTime}>{timechip === null ? "any length of time" : timechip === 30 ? "30 minutes" : "an hour"}</button>}
         </div>
         <div className="row" style={{ marginTop: 4 }}>
-          {v.start && <button className="btn" style={{ flex: 1, background: v.col, borderColor: v.col }} onClick={v.onStart}>{v.start}</button>}
-          {v.skip && <button className="btn ghost" style={{ minWidth: 92 }} onClick={v.onSkip}>{v.skip}</button>}
+          {v.start && go1 && <button className="btn" style={{ flex: 1, background: v.col, borderColor: v.col }} onClick={go1}>{v.start}</button>}
+          {v.second && <button className="btn ghost" style={{ minWidth: 92 }} onClick={v.second.run}>{v.second.label}</button>}
+          {v.skip && onSkip && <button className="btn ghost" style={{ minWidth: 92 }} onClick={onSkip}>{v.skip}</button>}
         </div>
       </div>
       {v.next ? <div className="small">{v.next}</div> : <div className="small">&nbsp;</div>}
     </>
+  );
+}
+
+/** After the test: enter the score if you like. Asked once more a week later, then quiet. */
+function AfterTest() {
+  const { d } = useApp();
+  const [score, setScore] = useState("");
+  const asked = d.seen.get("after-test");
+  if (d.testResult) {
+    const reached = d.testResult.score !== null && d.testResult.score >= 665;
+    return (
+      <div className="card" style={{ boxShadow: "6px 6px 0 var(--gen-t)" }}>
+        <div className="eyebrow">After the test</div>
+        <div className="t">{reached ? "That's it. Well done." : "Thank you for telling the app."}</div>
+        <div style={{ fontSize: 17, color: "var(--muted)" }}>Your data stays here. Settings → Back up a copy downloads all of it.</div>
+      </div>
+    );
+  }
+  const weekLater = asked && (Date.now() - asked) / 86_400_000 >= 7 && !d.seen.has("after-test-2");
+  if (asked && !weekLater) {
+    return <div className="card" style={{ boxShadow: "6px 6px 0 var(--gen-t)" }}><div className="eyebrow">After the test</div><div className="t">Nothing else is on here.</div></div>;
+  }
+  return (
+    <div className="card" style={{ boxShadow: "6px 6px 0 var(--gen-t)" }}>
+      <div className="eyebrow">After the test</div>
+      <div className="t">How did it go?</div>
+      <div style={{ fontSize: 17, color: "var(--muted)" }}>You can enter your score, but you don't have to.</div>
+      <div className="row">
+        <input inputMode="numeric" value={score} onChange={(e) => setScore(e.target.value.replace(/\D/g, ""))} placeholder="205–805" style={{ width: 120, height: 48, border: "1.5px solid var(--line-2)", borderRadius: 10, padding: "0 10px", fontSize: 18 }} />
+        <button className="btn small" disabled={!score} onClick={() => void record({ type: "test.result", score: Number(score) })}>Save</button>
+        <button className="btn ghost small" onClick={() => void record({ type: "seen", what: asked ? "after-test-2" : "after-test" })}>Not now</button>
+      </div>
+    </div>
   );
 }

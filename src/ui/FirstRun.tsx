@@ -9,6 +9,7 @@ import { kvGet, kvSet, persistStorage, record, saveContent } from "../data/db";
 import { folderSupported, pickFolder, readJsonFile, testFolderWrite } from "../data/backup";
 import { Screen } from "./bits";
 import { DateFields, useFinish } from "./Settings";
+import { Bookmarklet } from "./Share";
 
 const SESSION_FLAG = "gmat-session-open";
 
@@ -55,7 +56,7 @@ export function DayOne({ fromSettings }: { fromSettings?: boolean }) {
         <div className="box">
           <div className="eyebrow">1 · Keeping the data</div>
           <div style={{ fontSize: 18 }}>{line(x.persist?.ok, "The browser will keep the app's data.",
-            "The browser didn't promise to keep the data. It usually still does; the backup covers the rest.", "Asking the browser…")}</div>
+            "The browser didn't promise to keep the data. It usually keeps it anyway; the backup covers the rest.", "Asking the browser…")}</div>
         </div>
 
         <div className="box">
@@ -182,6 +183,8 @@ export function Setup() {
           </div>
         </div>
         <div style={{ fontSize: 16, color: "var(--muted)" }}>It turns itself off after two hours, in case you forget.</div>
+        <div className="eyebrow" style={{ marginTop: 6 }}>One more thing, once</div>
+        <Bookmarklet />
         <div className="spacer" />
         <button className="btn" autoFocus onClick={async () => { await record({ type: "setup.done" }); go("/"); }}>Got it</button>
       </div>

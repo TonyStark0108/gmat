@@ -61,6 +61,9 @@ export default defineConfig({
   ],
   test: {
     environment: "node",
+    // the plan runs on Indian time; tests must too, wherever they run (GitHub's machines are on UTC)
+    env: { TZ: "Asia/Kolkata" },
+    testTimeout: 120_000,
     include: ["tests/**/*.test.ts"],
   },
 });

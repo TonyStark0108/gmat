@@ -2,9 +2,15 @@ import { lazy, Suspense, useEffect } from "react";
 import { go, useRoute } from "./app/router";
 import { useApp } from "./app/store";
 import { record } from "./data/db";
+import { CardSession, ManageCards } from "./ui/Cards";
 import { DayOne, LoadContent, Setup, dayOnePassed } from "./ui/FirstRun";
 import { Home } from "./ui/Home";
+import { Life } from "./ui/Life";
+import { ErrorsScreen, ProgressScreen } from "./ui/Progress";
+import { MixedReviewScreen } from "./ui/review/MixedReview";
+import { SetReviewScreen } from "./ui/review/SetReview";
 import { SettingsScreen } from "./ui/Settings";
+import { ShareIn } from "./ui/Share";
 import { TaskRunner } from "./ui/tasks/TaskRunner";
 import { Week } from "./ui/Week";
 
@@ -29,7 +35,17 @@ export function App() {
   if (contentState === "missing") return <LoadContent />;
   if (!d.setupDone) return <Setup />;
   if (path.startsWith("/task/")) return <TaskRunner key={path} pieceId={decodeURIComponent(path.slice(6))} />;
+  if (path.startsWith("/review/")) {
+    const id = decodeURIComponent(path.slice(8));
+    return id.startsWith("mixed:") ? <MixedReviewScreen key={id} id={id} /> : <SetReviewScreen key={id} id={id} />;
+  }
+  if (path === "/cards") return <CardSession key={params.toString()} topic={params.get("topic") ?? undefined} />;
+  if (path === "/cards/manage") return <ManageCards />;
   if (path === "/week") return <Week />;
+  if (path === "/progress") return <ProgressScreen />;
+  if (path === "/errors") return <ErrorsScreen />;
+  if (path === "/life") return <Life />;
+  if (path === "/share") return <ShareIn params={params} />;
   if (path === "/settings") return <SettingsScreen />;
   return <Home />;
 }

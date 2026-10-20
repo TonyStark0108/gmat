@@ -101,3 +101,10 @@ export function isContent(x: unknown): x is Content {
 }
 
 export const BOOK_NAMES: Record<BookId, string> = { og: "OG", qr: "Quant Review", vr: "Verbal Review", dir: "DI Review" };
+
+/** Printed pages for a range of questions, from the book's own index. */
+export function pagesFor(content: Content | null, book: string, a: number, b: number): [number, number] | null {
+  const qs = content?.book_keys.books[book as BookId]?.questions ?? [];
+  const pages = qs.filter((q) => q.n >= a && q.n <= b && q.page).map((q) => q.page!);
+  return pages.length ? [Math.min(...pages), Math.max(...pages)] : null;
+}

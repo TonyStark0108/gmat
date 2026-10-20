@@ -4,9 +4,10 @@
 import { addDays, parseYmd, ymd } from "./calendar";
 import type { Piece } from "./pieces";
 import type { Derived } from "./state";
-import type { WeekPlan } from "./week";
 
-export function percentDone(pieces: Piece[], done: Set<string>): number {
+/** Share of the plan done, by minutes. Tasks you let go leave the total, so the % can only rise. */
+export function percentDone(pieces: Piece[], done: Set<string>, letGo: Set<string> = new Set()): number {
+  pieces = pieces.filter((p) => !letGo.has(p.taskId) || done.has(p.id));
   const total = pieces.reduce((s, p) => s + p.minutes, 0);
   const got = pieces.reduce((s, p) => s + (done.has(p.id) ? p.minutes : 0), 0);
   return total ? Math.floor((100 * got) / total) : 0;
@@ -27,19 +28,6 @@ export function weeksInARow(counted: Set<string>, currentWeek: string): number {
   return n;
 }
 
-/** A week counts when every chip is done and the rest day is taken (tapped, or a day under 15 minutes). */
-export function weekCounts(plan: WeekPlan, d: Derived, today: string): boolean {
-  if (plan.pause || plan.chips.length === 0) return false;
-  if (!plan.chips.every((c) => d.done.has(c.pieceId))) return false;
-  if (d.restTapped.has(plan.weekStart)) return true;
-  for (let i = 0; i < 7; i++) {
-    const day = ymd(addDays(parseYmd(plan.weekStart), i));
-    if (day >= today) break;             // only days that are over
-    if ((d.minutesByDay.get(day) ?? 0) < 15) return true;
-  }
-  return false;
-}
-
 export const LEVELS = [
   { n: 1, name: "Starting line", weeks: [1, 1] },
   { n: 2, name: "Groundwork", weeks: [1, 3] },
@@ -47,11 +35,12 @@ export const LEVELS = [
   { n: 4, name: "Halfway", weeks: [1, 8] },
   { n: 5, name: "Sharpening", weeks: [1, 10] },
   { n: 6, name: "Plan complete", weeks: [1, 13] },
-  { n: 7, name: "Ready", weeks: null },   // mocks only (Phase 3)
+  { n: 7, name: "Ready", weeks: null },   // mocks only
 ] as const;
 
 /** The highest level the work so far unlocks (levels 1–6 count plan weeks done). */
-export function levelFromWork(pieces: Piece[], done: Set<string>, errorsHalfRetired = true): number {
+export function levelFromWork(pieces: Piece[], done: Set<string>, errorsHalfRetired = true, ready = false): number {
+  if (ready) return 7;              // Level 7 depends only on mocks
   let level = 0;
   for (const L of LEVELS) {
     if (!L.weeks) break;

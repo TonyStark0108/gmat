@@ -1,7 +1,11 @@
+import type { Section } from "./content";
+
 // Every setting, pre-filled with the spec's defaults (spec: Your dates; decisions.md).
 
 export interface Slot { days: number[]; start: string; end: string } // days: 0 Sun … 6 Sat
 export interface Pause { from: string; to: string }                   // inclusive, YYYY-MM-DD
+/** "Something came up": days with no time ("off") or a light bus week ("light"). Set from events. */
+export interface LifeBlock { from: string; to: string; mode: "off" | "light" }
 
 export interface Settings {
   startDate: string;
@@ -21,6 +25,14 @@ export interface Settings {
   verbalReviewOnBus: boolean;
   lateNight: string;
   sundayNote: boolean;
+  /** The finish date the plan was agreed at (setup, or the last date-check choice); the date check compares with it. */
+  agreedFinish: string | null;
+  /** "Keep the date, do what fits": reading and CR go to the bus only. */
+  fitMode: boolean;
+  /** Filled in from "something came up" events, never typed. */
+  life: LifeBlock[];
+  /** Rebuild weeks: that week, the section's new plan work waits while its basics come back. */
+  rebuild: { week: string; section: Section }[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -41,7 +53,13 @@ export const DEFAULT_SETTINGS: Settings = {
   verbalReviewOnBus: true,
   lateNight: "23:00",
   sundayNote: true,
+  agreedFinish: null,
+  fitMode: false,
+  life: [],
+  rebuild: [],
 };
 
 export const PLAN_SHARE = 0.85;          // the free 15% (spec: The week)
 export const WEEK_CAP_MIN = 15 * 60;     // never more than 15 hours a week
+export const LIGHT_WEEK_BUS_MIN = 270;   // a light bus week: 4–5 hours of reading, videos and cards
+export const TARGET = 665;               // the score the plan aims at

@@ -1,10 +1,16 @@
 // What goes on the one card (spec: How the app decides what's on the card).
-// Step 1 filters out what doesn't fit right now; step 2 walks a fixed priority list.
+// Step 1 filters out what doesn't fit right now; step 2 walks a fixed priority list; step 3 fits it
+// to the time there is.
 
-import { isLateNight, slotAt, type SlotNow } from "./calendar";
+import { inPause, isLateNight, plusDays, slotAt, type SlotNow } from "./calendar";
+import { CARDS_PRIORITY_AT } from "./cards";
 import type { MixChoice } from "./events";
+import type { ExtraPiece } from "./extras";
+import { skippedOut } from "./life";
 import { sectionOfMix, type MixSection } from "./mix";
+import type { EndPhase } from "./mocks";
 import type { Piece } from "./pieces";
+import { fitsItem, mixedSession, type Item, type ReviewModel, type SetReview } from "./review";
 import type { Settings } from "./settings";
 import type { Derived } from "./state";
 import type { WeekPlan } from "./week";
@@ -12,10 +18,17 @@ import type { WeekPlan } from "./week";
 export type Card =
   | { kind: "warmup"; step: "mba" | "wait" }
   | { kind: "pause" }
-  | { kind: "late" }
+  | { kind: "late"; moved: boolean }
+  | { kind: "back" }
+  | { kind: "end"; phase: Exclude<EndPhase, "plan" | "taper" | "testweek"> }
   | { kind: "resume"; piece: Piece; progress: { done: number; total: number } }
+  | { kind: "resumeReview"; review: string; set: SetReview | null; items: Item[] }
   | { kind: "mock"; piece: Piece }
+  | { kind: "review"; set: SetReview }
+  | { kind: "mixed"; items: Item[]; returning: number }
+  | { kind: "redo"; piece: ExtraPiece }
   | { kind: "task"; piece: Piece; next: Piece | null }
+  | { kind: "cards"; due: number; why: "due" | "late" | "back" | "fallback" | "weekdone" | "end" }
   | { kind: "weekdone" }
   | { kind: "nothing"; why: "bus" | "offline" | "slot" | "slotEnding" | "skipped" };
 
@@ -23,8 +36,8 @@ export interface CardCtx {
   now: Date;
   today: string;
   settings: Settings;
-  pieces: Piece[];
-  byId: Map<string, Piece>;
+  pieces: Piece[];                 // the plan
+  byId: Map<string, Piece>;        // plan and extras
   week: WeekPlan | null;
   d: Derived;
   bus: boolean;
@@ -32,6 +45,13 @@ export interface CardCtx {
   mix: MixChoice;
   first?: MixSection;
   timeBudget: number | null;
+  reviews?: ReviewModel;
+  extras?: ExtraPiece[];           // this week's extras that are free to come up
+  cardsDue?: number;
+  phase?: EndPhase;
+  back?: boolean;                  // seven days or more away, and the welcome not yet seen today
+  letGo?: Set<string>;
+  topicWeight?: (topic: string) => number;
 }
 
 /** Does this piece fit what's happening right now? (Step 1) */
@@ -48,7 +68,15 @@ export function fitsNow(p: Piece, c: CardCtx, slot: SlotNow | null): boolean {
   return true;
 }
 
+function reviewFits(s: SetReview, c: CardCtx, slot: SlotNow | null): boolean {
+  if (s.online && !c.online) return false;
+  if (c.bus) return s.bus;
+  if (slot?.kind === "morning") return s.group === "Q" && slot.minutesLeft > 10 && s.minutes <= slot.minutesLeft + 5;
+  return true;
+}
+
 function taskDone(taskId: string, c: CardCtx): boolean {
+  if (c.letGo?.has(taskId)) return true;
   return c.pieces.filter((p) => p.taskId === taskId).every((p) => c.d.done.has(p.id));
 }
 
@@ -60,44 +88,79 @@ function ready(p: Piece, c: CardCtx): boolean {
 function progressOf(p: Piece, c: CardCtx) {
   const total = p.count ?? 0;
   const place = c.d.rcPlace.get(p.id);
-  if (p.task.kind === "rc_section" && place) return { done: place.passage, total: 4 };
+  if (p.task.kind === "rc_section" && place) return { done: place.passage, total: (p.task.pointer.passages as number[] | undefined)?.length ?? 4 };
   const answered = c.d.answers.get(p.id)?.size ?? 0;
   return { done: answered, total: total || Math.max(answered, 1) };
 }
+
+const TIMED = (p: Piece) => p.task.kind === "mock" || !!p.task.timed;
 
 export function chooseCard(c: CardCtx): Card {
   if (c.today < c.settings.startDate) {
     return { kind: "warmup", step: c.d.admin.get("warmup-mba") ? "wait" : "mba" };
   }
-  if (c.week?.pause) return { kind: "pause" };
-  if (isLateNight(c.now, c.settings)) return { kind: "late" };
+  const phase = c.phase ?? "plan";
+  const due = c.cardsDue ?? 0;
+  if (phase === "testday" || phase === "daybefore" || phase === "checklist" || phase === "after") return { kind: "end", phase };
+  if (phase === "cardsonly") return due ? { kind: "cards", due, why: "end" } : { kind: "end", phase };
+  // a pause week, or a pause day inside a week (holidays): nothing on the plan
+  if (c.week?.pause || inPause(c.today, c.settings)) return { kind: "pause" };
+  if (isLateNight(c.now, c.settings)) {
+    // After 11 pm, only cards, or nothing tonight. Past 11:30, tomorrow's redos move a day.
+    const moved = c.d.lateSessions.has(c.today);
+    return due ? { kind: "cards", due, why: "late" } : { kind: "late", moved };
+  }
+  if (c.back) return { kind: "back" };
 
   const slot = c.bus ? null : slotAt(c.now, c.settings);
   const fit = (p: Piece) => fitsNow(p, c, slot);
+  const skipped = c.d.skipsByDay.get(c.today) ?? new Set<string>();
+  const extras = c.extras ?? [];
+  const R = c.reviews;
 
-  // 1. Anything unfinished: a set you were in the middle of.
+  // 1. Anything unfinished: a set you were in the middle of, or a review you didn't complete.
   const open = [...c.d.started.entries()]
     .filter(([id]) => !c.d.done.has(id) && c.byId.has(id))
     .sort((a, b) => b[1] - a[1])
     .map(([id]) => c.byId.get(id)!)
     .find(fit);
   if (open) return { kind: "resume", piece: open, progress: progressOf(open, c) };
-
-  const chips = (c.week?.chips ?? []).map((ch) => c.byId.get(ch.pieceId)!).filter(Boolean);
-  const todo = chips.filter((p) => !c.d.done.has(p.id));
-  if (chips.length && !todo.length) return { kind: "weekdone" };
-
-  // 2. Today's mock, on the day it's planned, off the bus.
-  if (!c.bus && c.week?.mockDay && c.today >= c.week.mockDay) {
-    const mock = todo.find((p) => p.task.kind === "mock" && ready(p, c));
-    if (mock && slot?.kind !== "morning") return { kind: "mock", piece: mock };
+  if (R) {
+    const s = R.sets.find((x) => x.status === "started" && reviewFits(x, c, slot));
+    if (s) return { kind: "resumeReview", review: s.id, set: s, items: s.items };
+    if (R.openMixed && R.openMixed.items.some((it) => fitsItem(it, { bus: c.bus, online: c.online, morning: slot?.kind === "morning" }))) {
+      return { kind: "resumeReview", review: R.openMixed.id, set: null, items: R.openMixed.items };
+    }
   }
 
-  // 3. Redos that are due (Phase 2).
+  const chips = (c.week?.chips ?? []).map((ch) => c.byId.get(ch.pieceId)!).filter(Boolean);
+  const todo = chips.filter((p) => !c.d.done.has(p.id) && !c.letGo?.has(p.taskId));
 
-  // 4. Today's mix from this week's chips.
-  const skipped = c.d.skipsByDay.get(c.today) ?? new Set<string>();
-  const candidates = todo.filter((p) => ready(p, c) && fit(p) && p.task.kind !== "mock" && !skipped.has(p.id));
+  // 2. Today's mock, on the day it's planned (or moved to), off the bus.
+  if (!c.bus) {
+    const mock = todo.find((p) => p.task.kind === "mock" && ready(p, c) && (c.d.mockMoved.get(p.id) ?? c.week?.mockDay ?? "9999") <= c.today);
+    if (mock && slot?.kind !== "morning" && (c.online || mock.offlineOk)) return { kind: "mock", piece: mock };
+  }
+
+  // 3. Redos that are due: set reviews, mixed returns and second tries, drill repeats, passages.
+  if (R) {
+    const sets = R.sets.filter((s) => s.status === "open" && !skipped.has(s.id) && reviewFits(s, c, slot)).sort((a, b) => (a.windowFrom < b.windowFrom ? -1 : 1));
+    if (sets.length) return { kind: "review", set: sets[0] };
+    if (!skipped.has("mixed")) {
+      const items = mixedSession(R, c.d, c.today, { bus: c.bus, online: c.online, morning: slot?.kind === "morning" }, c.topicWeight);
+      const fitsSlot = slot?.kind !== "morning" || (slot.minutesLeft > 10 && items.length * 3 <= slot.minutesLeft);
+      if (items.length && fitsSlot) return { kind: "mixed", items, returning: items.filter((it) => it.state === "return").length };
+    }
+  }
+  if (phase === "testweek") return due ? { kind: "cards", due, why: "end" } : { kind: "weekdone" };
+  const redo = extras.find((x) => (x.xkind === "drill" || x.xkind === "passage") && !skipped.has(x.id) && fit(x) && x.availableFrom <= c.today);
+  if (redo) return { kind: "redo", piece: redo };
+
+  // 4. Today's mix from this week's chips, and top-ups and help chips by their section.
+  // In the last two weeks before the test: the last mock or a timed section, then light review.
+  const sideWork = extras.filter((x) => !x.hidden && !["drill", "passage", "extra"].includes(x.xkind) && !(phase === "taper" && x.xkind !== "keepsharp"));
+  const pool = [...todo.filter((p) => phase !== "taper" || TIMED(p)), ...sideWork];
+  const candidates = pool.filter((p) => ready(p, c) && fit(p) && p.task.kind !== "mock" && !skipped.has(p.id) && !skippedOut(c.d, p.id, c.week?.weekStart ?? c.today));
   if (!candidates.length && slot?.kind === "morning" && slot.minutesLeft > 10) {
     // Quant or DI work waiting on a video (e.g. week 1's "watch this first"): the morning takes the video.
     const blockedQ = todo.filter((p) => p.group === "Q" && !ready(p, c));
@@ -105,15 +168,37 @@ export function chooseCard(c: CardCtx): Card {
       && blockedQ.some((q) => q.task.depends_on.includes(p.taskId)));
     if (unlock) return { kind: "task", piece: unlock, next: null };
   }
-  if (!candidates.length) {
-    if (todo.some((p) => skipped.has(p.id) && fit(p))) return { kind: "nothing", why: "skipped" };
-    if (slot?.kind === "morning" && slot.minutesLeft <= 10) return { kind: "nothing", why: "slotEnding" };
-    return { kind: "nothing", why: c.bus ? "bus" : !c.online ? "offline" : "slot" };
+  if (candidates.length) {
+    const pick = pickFromMix(candidates, c, lastGroupToday(c));
+    const rest = candidates.filter((p) => p.id !== pick.id);
+    const next = rest.length ? pickFromMix(rest, c, pick.group) : null;
+    return { kind: "task", piece: pick, next };
   }
-  const pick = pickFromMix(candidates, c, lastGroupToday(c));
-  const rest = candidates.filter((p) => p.id !== pick.id);
-  const next = rest.length ? pickFromMix(rest, c, pick.group) : null;
-  return { kind: "task", piece: pick, next };
+
+  // 5. The week's one extra-practice chip, once the required chips are done.
+  const requiredLeft = todo.filter((p) => !skippedOut(c.d, p.id, c.week?.weekStart ?? c.today)).length;
+  if (!requiredLeft && phase !== "taper") {
+    const extra = extras.find((x) => x.xkind === "extra" && !skipped.has(x.id) && fit(x));
+    if (extra) return { kind: "task", piece: extra, next: null };
+  }
+
+  // 6. Flashcards, if at least ten are due.
+  if (due >= CARDS_PRIORITY_AT) return { kind: "cards", due, why: "due" };
+
+  // The bus is ahead of the desk: a reserve CR set, never next week's plan.
+  if (c.bus && requiredLeft && c.online && phase === "plan") {
+    const reserve = extras.find((x) => x.xkind === "reserve" && !c.d.done.has(x.id) && !skipped.has(x.id));
+    if (reserve) return { kind: "task", piece: reserve, next: null };
+  }
+
+  // 7. The week is done: cards or rest.
+  if (chips.length && !requiredLeft) return { kind: "weekdone" };
+
+  // Everything is filtered out: cards if there are any, otherwise say so.
+  if (due) return { kind: "cards", due, why: "fallback" };
+  if (todo.some((p) => skipped.has(p.id) && fit(p))) return { kind: "nothing", why: "skipped" };
+  if (slot?.kind === "morning" && slot.minutesLeft <= 10) return { kind: "nothing", why: "slotEnding" };
+  return { kind: "nothing", why: c.bus ? "bus" : !c.online ? "offline" : "slot" };
 }
 
 function lastGroupToday(c: CardCtx): "Q" | "V" | null {
@@ -152,3 +237,17 @@ export function pickFromMix(cands: Piece[], c: CardCtx, lastGroup: "Q" | "V" | "
   }
   return pool[0];
 }
+
+/** "Instead: …" after a Skip: the week's extra chip if it's unlocked, otherwise the next chip from a different section. */
+export function alternativeFor(p: Piece, c: CardCtx): Piece | null {
+  const slot = c.bus ? null : slotAt(c.now, c.settings);
+  const skippedToday = c.d.skipsByDay.get(c.today) ?? new Set();
+  const chips = (c.week?.chips ?? []).map((ch) => c.byId.get(ch.pieceId)!).filter(Boolean);
+  const todo = chips.filter((x) => !c.d.done.has(x.id));
+  const extra = (c.extras ?? []).find((x) => x.xkind === "extra" && !c.d.done.has(x.id));
+  if (extra && !todo.length && fitsNow(extra, c, slot)) return extra;
+  const cands = todo.filter((x) => x.id !== p.id && !skippedToday.has(x.id) && x.section !== p.section && x.task.kind !== "mock" && fitsNow(x, c, slot) && ready(x, c));
+  return cands.length ? pickFromMix(cands, c, p.group) : null;
+}
+
+export const tomorrowOf = (today: string) => plusDays(today, 1);

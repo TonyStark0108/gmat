@@ -18,21 +18,28 @@ const FLAGS = [null, "stumped", "guessed", "slow"] as const;
 const SET_MINUTES = 60;           // the plan measures a full LSAT set at about an hour
 
 /** Timer mode by plan stage: untimed early, then timed with the clock hidden, then visible. */
-function timerMode(planWeek: number): "untimed" | "hidden" | "visible" {
-  if (planWeek <= 5) return "untimed";
-  if (planWeek <= 9) return "hidden";
+function timerMode(planWeek: number, early: boolean): "untimed" | "hidden" | "visible" {
+  // if "timing" is your top tag for reading, the clock comes in sooner (spec: Adapting, Timing)
+  const w = early ? planWeek + 2 : planWeek;
+  if (w <= 5) return "untimed";
+  if (w <= 9) return "hidden";
   return "visible";
 }
 
 export function RcReader({ piece, onDone }: { piece: Piece; onDone: (l: Logged | null) => void }) {
   const { content } = useApp();
-  const section = useMemo(() => content?.rc_bank.sections.find((s) => s.id === piece.task.pointer.section), [content, piece]);
+  const section = useMemo(() => {
+    const full = content?.rc_bank.sections.find((s) => s.id === piece.task.pointer.section);
+    const only = piece.task.pointer.passages as number[] | undefined;
+    // a passage that comes back on its own is a one-passage set
+    return full && only ? { ...full, passages: only.map((i) => full.passages[i]).filter(Boolean) } : full;
+  }, [content, piece]);
   if (!section) return <Screen><Back /><div className="t">This reading set isn't in the content file.</div></Screen>;
   return <RcInner piece={piece} onDone={onDone} section={section} />;
 }
 
 function RcInner({ piece, onDone, section }: { piece: Piece; onDone: (l: Logged | null) => void; section: RcSection }) {
-  const { d, bus } = useApp();
+  const { d, bus, m } = useApp();
   const focus = useFocus();
   const place = d.rcPlace.get(piece.id) ?? { passage: 0, stage: "read" as const, q: 0 };
   const [pi, setPi] = useState(place.passage);
@@ -40,7 +47,7 @@ function RcInner({ piece, onDone, section }: { piece: Piece; onDone: (l: Logged 
   const [qi, setQi] = useState(place.q);
   const time = useTaskTime(piece.id, bus ? "bus" : "desk", "rc");
   const startedAt = d.started.get(piece.id) ?? now().getTime();
-  const mode = timerMode(piece.planWeek);
+  const mode = timerMode(piece.planWeek || 1, m.adapt.timingEarly("rc"));
   const [, tick] = useState(0);
   useEffect(() => { const t = setInterval(() => tick((x) => x + 1), 15000); return () => clearInterval(t); }, []);
 
@@ -86,12 +93,13 @@ function RcInner({ piece, onDone, section }: { piece: Piece; onDone: (l: Logged 
   }
   async function finish() {
     const all = section.passages.flatMap((p) => p.questions);
-    const m = markSet(all.map((qq) => ({ value: answers.get(qq.id)?.value ?? null, unsure: !!flags.get(qq.id), key: qq.answer })));
-    await record({ type: "piece.submitted", piece: piece.id, wrongOrUnsure: m.toLookAgain, answered: all.filter((qq) => answers.get(qq.id)).length });
+    const res = markSet(all.map((qq) => ({ value: answers.get(qq.id)?.value ?? null, unsure: !!flags.get(qq.id), key: qq.answer })));
+    await record({ type: "piece.submitted", piece: piece.id, wrongOrUnsure: res.toLookAgain, answered: all.filter((qq) => answers.get(qq.id)).length });
     await record({ type: "piece.done", piece: piece.id });
     time.flush();
     focus.boundary(0, true);
-    onDone({ toLookAgain: m.toLookAgain, note: "Reading questions don't come back one by one. How you did by question type and topic shows at the review." });
+    onDone(piece.extra ? { toLookAgain: 0, note: "That passage is done." }
+      : { toLookAgain: res.toLookAgain, note: "Reading questions don't come back one by one. How you did by question type and topic shows at the review." });
   }
 
   useKeys({

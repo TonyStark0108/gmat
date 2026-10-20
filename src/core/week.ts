@@ -5,7 +5,7 @@
 // Both streams follow plan order. Desk time sets the pace: rides never take plan work from a plan
 // week the desk hasn't reached, so a quiet week of rides can't pull next week's plan forward.
 
-import { addDays, parseYmd, weekCapacity, ymd, type WeekCapacity } from "./calendar";
+import { addDays, isLightWeek, parseYmd, weekCapacity, ymd, type WeekCapacity } from "./calendar";
 import { load, type Piece } from "./pieces";
 import { WEEK_CAP_MIN, type Settings } from "./settings";
 
@@ -18,6 +18,7 @@ export interface WeekPlan {
   used: { desk: number; bus: number };
   pause: boolean;
   mockDay: string | null;   // the Saturday a mock is planned for
+  light?: boolean;          // a light bus week ("something came up → a whole week"); it still counts
 }
 
 const FIT_TOLERANCE = 1.1;   // a piece may run 10% over what's left of a budget
@@ -42,7 +43,9 @@ export function buildWeek(a: BuildArgs): WeekPlan {
   const empty: WeekPlan = { weekStart: a.weekStart, chips: [], cap, used: { desk: 0, bus: 0 }, pause: false, mockDay: null };
   if (cap.desk === 0 && cap.bus === 0) return { ...empty, pause: true };
 
-  const remaining = a.pieces.filter((p) => !a.done.has(p.id));
+  // a rebuild week holds that section's new plan work back
+  const held = new Set((a.settings.rebuild ?? []).filter((r) => r.week === a.weekStart).map((r) => r.section));
+  const remaining = a.pieces.filter((p) => !a.done.has(p.id) && !held.has(p.section));
   const chips: WeekChip[] = [];
   let desk = 0, bus = 0;
   const fits = (used: number, capMin: number, need: number) =>
@@ -68,7 +71,7 @@ export function buildWeek(a: BuildArgs): WeekPlan {
     if (fits(bus, cap.bus, need)) {
       bus += need;
       chips.push({ pieceId: p.id, budget: "bus", carried: !!a.carried?.has(p.id) });
-    } else if (desk + need <= cap.desk * FIT_TOLERANCE) {
+    } else if (!p.busOnly && desk + need <= cap.desk * FIT_TOLERANCE) {
       desk += need;          // spare desk time can take a reading or a video
       chips.push({ pieceId: p.id, budget: "desk", carried: !!a.carried?.has(p.id) });
     } else break;
@@ -86,7 +89,7 @@ export function buildWeek(a: BuildArgs): WeekPlan {
       if (a.settings.saturday.days.includes(d.getDay())) mockDay = ymd(d);
     }
   }
-  return { weekStart: a.weekStart, chips, cap, used: { desk, bus }, pause: false, mockDay };
+  return { weekStart: a.weekStart, chips, cap, used: { desk, bus }, pause: false, mockDay, light: isLightWeek(a.weekStart, a.settings) };
 }
 
 export interface Projection { finish: string | null; weeks: number; lastWeekStart: string | null }

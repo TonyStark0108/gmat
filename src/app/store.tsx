@@ -1,13 +1,13 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { studyDay, weekStartOf } from "../core/calendar";
+import { studyDay } from "../core/calendar";
 import { now } from "../core/clock";
 import type { Content } from "../core/content";
 import type { AppEvent } from "../core/events";
-import { planTasks, toPieces, type Piece } from "../core/pieces";
-import { levelFromWork } from "../core/progress";
-import { busOn, derive, type Derived } from "../core/state";
-import { countedEvents, planKey, weekEvents, weekPlanOf } from "../core/weekly";
+import { videosToCheck } from "../core/links";
+import { buildModel, upkeep, type Model } from "../core/model";
+import type { Piece } from "../core/pieces";
+import { derive, type Derived } from "../core/state";
 import type { WeekPlan } from "../core/week";
 import { db, devContent, record, storedContent } from "../data/db";
 
@@ -16,6 +16,7 @@ export interface App {
   contentState: "loading" | "missing" | "ready";
   setContent: (c: Content) => void;
   events: AppEvent[];
+  m: Model;
   d: Derived;
   pieces: Piece[];
   byId: Map<string, Piece>;
@@ -46,6 +47,12 @@ function useOnline() {
   return on;
 }
 
+const EMPTY: Content = {
+  format: "gmat-content", version: "none", plan: { tasks: [], settings_defaults: {}, section_text: {}, help: [] }, rc_bank: { sections: [] },
+  cr_bank: { default_sets: [], reserve_sets: [], has_official_answers: false }, book_keys: { books: {} as Content["book_keys"]["books"] },
+  links: { links: [] }, benchmarks: { rules: [] }, decks: { quant_facts: [], method: [] },
+};
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [content, setContent] = useState<Content | null>(null);
   const [contentState, setContentState] = useState<App["contentState"]>("loading");
@@ -64,33 +71,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const nowD = useMemo(() => now(), [tick, events]);   // eslint-disable-line react-hooks/exhaustive-deps
-  const today = studyDay(nowD);
-  const settingsOnly = useMemo(() => derive(events ?? []).settings, [events]);
-  const key = planKey(settingsOnly);
-  const pieces = useMemo(() => (content ? toPieces(planTasks(content, settingsOnly), settingsOnly) : []), [content, key]); // eslint-disable-line react-hooks/exhaustive-deps
-  const byId = useMemo(() => new Map(pieces.map((p) => [p.id, p])), [pieces]);
-  const d = useMemo(() => derive(events ?? [], (id) => byId.get(id)?.section), [events, byId]);
-  const week = useMemo(() => weekPlanOf(d, weekStartOf(today), d.settings), [d, today]);
+  const m = useMemo(() => buildModel(content ?? EMPTY, events ?? [], nowD, online), [content, events, nowD, online]);
+  const d = content ? m.d : derive(events ?? []);
 
   // Keep the week built and the numbers that only go up recorded.
   const busy = useRef(false);
   useEffect(() => {
     if (!events || !content || !d.setupDone || busy.current) return;
-    const todo = [...weekEvents(pieces, d, d.settings, today), ...countedEvents(d, d.settings, today)];
-    const lvl = levelFromWork(pieces, d.done);
-    if (lvl > d.level) todo.push({ type: "level", level: lvl });
+    const todo = upkeep(m);
     if (!todo.length) return;
     busy.current = true;
     (async () => {
       for (const e of todo) await record(e);
       busy.current = false;
     })();
-  }, [events, content, d, pieces, today]);
+  }, [m]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Once a week, with signal: check the plan's videos through YouTube's public oEmbed service, so a
+  // dead one is swapped before you reach it. GMAT Club links are never checked: its terms forbid it.
+  const checking = useRef(false);
+  useEffect(() => {
+    if (!content || !online || !d.setupDone || checking.current) return;
+    const due = videosToCheck(content, m.d, nowD.getTime());
+    if (!due.length) return;
+    checking.current = true;
+    (async () => {
+      for (const v of due.slice(0, 60)) {
+        try {
+          const r = await fetch(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(`https://www.youtube.com/watch?v=${v.youtubeId}`)}`);
+          await record({ type: "video.check", youtubeId: v.youtubeId, status: r.status });
+        } catch { break; }    // no signal after all: try again another time
+      }
+      checking.current = false;
+    })();
+  }, [content, online, d.setupDone]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const app: App = {
     content, contentState, setContent: (c) => { setContent(c); setContentState("ready"); },
-    events: events ?? [], d, pieces, byId, now: nowD, today, week,
-    bus: busOn(d, nowD.getTime()), online, refresh: () => setTick((x) => x + 1),
+    events: events ?? [], m, d, pieces: m.plan, byId: m.byId, now: nowD, today: studyDay(nowD), week: m.week,
+    bus: m.bus, online, refresh: () => setTick((x) => x + 1),
   };
   if (events === null) return null;
   return <Ctx.Provider value={app}>{children}</Ctx.Provider>;
