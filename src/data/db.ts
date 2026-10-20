@@ -8,15 +8,19 @@ import { isContent, type Content } from "../core/content";
 import type { AppEvent, EventBody } from "../core/events";
 
 interface KV { key: string; value: unknown }
+/** A tutor session: the conversation exactly as sent to Claude (so thinking and tool turns replay unchanged). */
+export interface TutorThread { id: string; title: string; mode: string; created: number; updated: number; messages: unknown[]; draft?: string; draftContext?: string }
 interface ContentRow { key: string; value: Content }
 
 class GmatDB extends Dexie {
   events!: Table<AppEvent, string>;
   kv!: Table<KV, string>;
   content!: Table<ContentRow, string>;
+  threads!: Table<TutorThread, string>;
   constructor(name = "gmat") {
     super(name);
     this.version(1).stores({ events: "id, ts, type, day", kv: "key", content: "key" });
+    this.version(2).stores({ events: "id, ts, type, day", kv: "key", content: "key", threads: "id, updated" });
   }
 }
 
@@ -75,11 +79,26 @@ export async function kvSet(key: string, value: unknown) {
 }
 
 // ---------------------------------------------------------------- backup
-export interface Backup { format: "gmat-backup"; version: 1; exportedAt: string; contentVersion: string | null; events: AppEvent[] }
+export interface Backup { format: "gmat-backup"; version: 1; exportedAt: string; contentVersion: string | null; events: AppEvent[]; tutor?: TutorThread[] }
+
+/** Photos stay on the laptop: a backup keeps the words of a tutor session, not the pictures. */
+export function withoutImages(t: TutorThread): TutorThread {
+  const strip = (c: unknown): unknown => {
+    if (Array.isArray(c)) return c.map(strip);
+    if (c && typeof c === "object") {
+      const o = c as Record<string, unknown>;
+      if (o.type === "image") return { type: "text", text: "[a photo, kept on the laptop it was taken on]" };
+      return Object.fromEntries(Object.entries(o).map(([k, v]) => [k, strip(v)]));
+    }
+    return c;
+  };
+  return { ...t, messages: strip(t.messages) as unknown[] };
+}
 
 export async function makeBackup(): Promise<Backup> {
   const c = await storedContent();
-  return { format: "gmat-backup", version: 1, exportedAt: now().toISOString(), contentVersion: c?.version ?? null, events: await allEvents() };
+  const tutor = (await db.threads.toArray()).map(withoutImages);
+  return { format: "gmat-backup", version: 1, exportedAt: now().toISOString(), contentVersion: c?.version ?? null, events: await allEvents(), tutor };
 }
 
 /** Adds every event the backup has and this device doesn't. Nothing here is ever overwritten. */
@@ -89,6 +108,11 @@ export async function restoreBackup(b: unknown): Promise<{ added: number; total:
   const have = new Set(await db.events.toCollection().primaryKeys());
   const fresh = bk.events.filter((e) => !have.has(e.id));
   await db.events.bulkAdd(fresh);
+  // tutor sessions: keep whichever copy of a session is newer
+  for (const t of bk.tutor ?? []) {
+    const mine = await db.threads.get(t.id);
+    if (!mine || mine.updated < t.updated) await db.threads.put(t);
+  }
   if (fresh.length) await record({ type: "restored", added: fresh.length });
   return { added: fresh.length, total: bk.events.length };
 }

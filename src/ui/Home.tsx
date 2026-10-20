@@ -156,6 +156,7 @@ export function Home() {
           <NavLink to="/week" label="This week" />
           <NavLink to="/progress" label="Progress" />
           <NavLink to="/errors" label="What to work on" />
+          <NavLink to="/tutor" label="Tutor" />
           <NavLink to="/settings" label="Settings" />
           {import.meta.env.DEV && <NavLink to="/dev" label="Time machine" />}
         </nav>

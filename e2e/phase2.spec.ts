@@ -3,13 +3,12 @@
 // "something came up", a question sent in from GMAT Club, the Sunday note, a mock, and the progress
 // pages. Answers are typed; the trackpad is never needed for a review or cards (test 13).
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import fs from "node:fs";
 import type { Content } from "../src/core/content";
 import { markOne } from "../src/core/grid";
 import { buildModel } from "../src/core/model";
-import { Bot } from "../tests/bot";
-import { CONTENT, at, card, expectCardTitle, hasContent, jumpTo, launch, profileDir, resetAlbum, setPrefix, setStep, settled, snap, writeAlbum } from "./helpers";
+import { CONTENT, at, card, firstWeek, hasContent, jumpTo, launch, profileDir, resetAlbum, seed, setPrefix, setStep, settled, snap, writeAlbum } from "./helpers";
 
 test.skip(!hasContent(), "needs data/gmat-content-v1.json (run `npm run content`)");
 
@@ -17,31 +16,6 @@ const notes: string[] = [];
 let passed = false;
 test.beforeAll(() => { resetAlbum(); setPrefix("p2-"); });
 test.afterAll(() => writeAlbum("Phases 2 and 3, tested by a robot", passed, notes, "album-phase2.html"));
-
-/** The first week, done by the simulated student: mornings, Saturday and the rides, through Saturday 5 December. */
-function firstWeek(content: Content) {
-  const bot = new Bot(content, 5, 0.7);
-  bot.setup(new Date("2026-11-28T11:00"));
-  for (const day of ["2026-12-01", "2026-12-02", "2026-12-03", "2026-12-04", "2026-12-05"]) {
-    const wd = new Date(`${day}T12:00`).getDay();
-    if ([2, 3, 4].includes(wd)) bot.session(new Date(`${day}T07:45`), 45, false);
-    if (wd === 6) bot.session(new Date(`${day}T10:00`), 240, false);
-    if (wd >= 1 && wd <= 5) bot.session(new Date(`${day}T18:45`), 80, true);
-  }
-  return bot;
-}
-
-async function seed(page: Page, events: unknown[]) {
-  await page.evaluate((evs) => new Promise<void>((res, rej) => {
-    const r = indexedDB.open("gmat");
-    r.onsuccess = () => {
-      const tx = r.result.transaction("events", "readwrite");
-      for (const e of evs as object[]) tx.objectStore("events").put(e);
-      tx.oncomplete = () => res();
-      tx.onerror = () => rej(tx.error);
-    };
-  }), events);
-}
 
 test("phases 2 and 3, end to end", async () => {
   const content = JSON.parse(fs.readFileSync(CONTENT, "utf-8")) as Content;

@@ -88,6 +88,7 @@ function One({ it, review }: { it: Item; review: string }) {
           <>
             <div className="title" style={{ fontSize: 28 }}>Here it is: {showAnswer(now.key)}.</div>
             {it.explanation && <div className="tiny">Where it's explained: {it.explanation}.</div>}
+            <button className="back" style={{ color: "var(--link)" }} onClick={() => go(`/tutor?ctx=${encodeURIComponent(`item:${it.id}`)}`)}>Ask the tutor about this one</button>
             <TagPick it={it} value={tag} line={line} onTag={setTag} onLine={setLine} />
           </>
         )}

@@ -20,6 +20,14 @@ events (IndexedDB) ──► derive() ──► buildModel() ──► chooseCar
 upkeep(model) ──► the records the app adds itself: the week, weeks that counted, levels, new cards
 ```
 
+## The tutor
+
+`src/core/tutor/` (what it knows: `brief.ts`; its tools: `tools.ts`; its instructions: `prompt.ts`; cost: `cost.ts`)
+and `src/data/tutor.ts` (the streaming tool loop with Claude Opus 5.5, the server-side fallback and prompt
+caching). It uses your own Claude API key, kept only in the browser. Answers you haven't retried stay hidden from
+it; homework it sets waits for your OK. Tests run against a stand-in for Claude's service (`tests/sse.ts`), so
+they never spend money.
+
 ## Parts
 
 | Folder | What |
@@ -29,7 +37,7 @@ upkeep(model) ──► the records the app adds itself: the week, weeks that co
 | `src/data/` | Storage (IndexedDB via Dexie, add-only event log), backup and restore |
 | `src/ui/` | Screens |
 | `tests/` | `npm test`: the logic, including a simulated month and a simulated full plan (`bot.ts`) |
-| `e2e/` | `npm run e2e`: the whole app in Chromium, by a robot, with a screenshot album |
+| `e2e/` | `npm run e2e`: the whole app in Chromium, by a robot, with screenshot albums (including the tutor) |
 
 ## Commands
 

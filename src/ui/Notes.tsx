@@ -193,6 +193,7 @@ function SundayNote({ ws }: { ws: string }) {
       <div className="row wrap">
         <button className="btn small outline" onClick={() => void share()}>Share</button>
         <button className="btn small ghost" onClick={async () => { await close(); go("/week"); }}>This week</button>
+        <button className="btn small ghost" onClick={async () => { await close(); go(`/tutor?ctx=${encodeURIComponent(`checkin:${ws}`)}`); }}>Check in with your tutor</button>
         <button className="btn small ghost" onClick={() => void close()}>OK</button>
       </div>
     </div>

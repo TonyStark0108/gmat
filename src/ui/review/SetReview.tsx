@@ -206,8 +206,10 @@ function Answers({ s, header, onDone }: { s: SR; header: React.ReactNode; onDone
                 <div className="row">
                   <button className="back" onClick={() => setFixing({ it, what: "book" })}>My book says…</button>
                   <button className="back" onClick={() => setFixing({ it, what: "mine" })}>I entered it wrong</button>
+                  <button className="back" style={{ color: "var(--link)" }} onClick={() => go(`/tutor?ctx=${encodeURIComponent(`item:${it.id}`)}`)}>Ask the tutor</button>
                 </div>
               )}
+              {it.source !== "book" && <button className="back" style={{ color: "var(--link)" }} onClick={() => go(`/tutor?ctx=${encodeURIComponent(`item:${it.id}`)}`)}>Ask the tutor about this one</button>}
               {fixing?.it.id === it.id && (
                 <div className="row wrap" style={{ gap: 6 }}>
                   <span className="small">{fixing.what === "book" ? "Your book's answer:" : "What you meant to enter:"}</span>
@@ -279,11 +281,11 @@ function Close({ s, header, done }: { s: SR; header: React.ReactNode; done: () =
   const sum = useMemo(() => closeOf(content!, s, items, linesWritten, d.settings, today, plusDays(weekStartOf(today), 7)), [s, items, linesWritten]); // eslint-disable-line react-hooks/exhaustive-deps
   const hist = m.adapt.history(weekStartOf(today));
   const offers = useMemo(() => topupOffers(s.all, m.reviews, hist), [s.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  const finish = async () => {
+  const finish = async (home = true) => {
     if (sum.add && !d.extras.has(sum.add.id)) await record({ type: "extra.added", extra: sum.add });
     if (!d.reviewDone.has(s.id)) await record({ type: "review.done", review: s.id });
     done();
-    go("/");
+    if (home) go("/");
   };
   return (
     <Screen><div className="column">
@@ -301,6 +303,9 @@ function Close({ s, header, done }: { s: SR; header: React.ReactNode; done: () =
       {sum.cards && <div style={{ fontSize: 18 }}>{sum.cards}</div>}
       {sum.add && <div className="small">Added to next week: {sum.add.title}.</div>}
       {offers.map((o) => <TopupOffer key={o.id} offer={o} />)}
+      {items.some((it) => it.firstMark === "wrong") && (
+        <button className="btn small outline" style={{ alignSelf: "flex-start" }} onClick={async () => { await finish(false); go(`/tutor?ctx=${encodeURIComponent(`review:${s.id}`)}`); }}>Go through these with the tutor</button>
+      )}
       <div className="spacer" />
       <EnterButton label="Back to today" onClick={() => void finish()} />
     </div></Screen>

@@ -1,4 +1,6 @@
 import { chromium, expect, type BrowserContext, type Page } from "@playwright/test";
+import type { Content } from "../src/core/content";
+import { Bot } from "../tests/bot";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -90,3 +92,29 @@ export const card = (page: Page) => page.locator(".card").first();
 export async function expectCardTitle(page: Page, re: RegExp | string) {
   await expect(card(page).locator(".t")).toHaveText(re);
 }
+
+/** The first week, done by the simulated student: mornings, Saturday and the rides, through Saturday 5 December. */
+export function firstWeek(content: Content) {
+  const bot = new Bot(content, 5, 0.7);
+  bot.setup(new Date("2026-11-28T11:00"));
+  for (const day of ["2026-12-01", "2026-12-02", "2026-12-03", "2026-12-04", "2026-12-05"]) {
+    const wd = new Date(`${day}T12:00`).getDay();
+    if ([2, 3, 4].includes(wd)) bot.session(new Date(`${day}T07:45`), 45, false);
+    if (wd === 6) bot.session(new Date(`${day}T10:00`), 240, false);
+    if (wd >= 1 && wd <= 5) bot.session(new Date(`${day}T18:45`), 80, true);
+  }
+  return bot;
+}
+
+export async function seed(page: Page, events: unknown[]) {
+  await page.evaluate((evs) => new Promise<void>((res, rej) => {
+    const r = indexedDB.open("gmat");
+    r.onsuccess = () => {
+      const tx = r.result.transaction("events", "readwrite");
+      for (const e of evs as object[]) tx.objectStore("events").put(e);
+      tx.oncomplete = () => res();
+      tx.onerror = () => rej(tx.error);
+    };
+  }), events);
+}
+

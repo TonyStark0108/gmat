@@ -28,7 +28,8 @@ export function BookGrid({ piece, onDone, numbers, bookId, embedded, onSubmitted
   const book = (bookId ?? piece.task.pointer.book ?? "og") as keyof typeof BOOK_NAMES;
   const [a, b] = numbers ?? piece.numbers ?? [1, 1];
   const keys = useMemo(() => new Map<number, BookQuestion>((content?.book_keys.books[book]?.questions ?? []).map((q) => [q.n, q])), [content, book]);
-  const nums = useMemo(() => Array.from({ length: b - a + 1 }, (_, i) => a + i), [a, b]);
+  const list = numbers ? undefined : (piece.task.pointer.list as number[] | undefined);
+  const nums = useMemo(() => list ?? Array.from({ length: b - a + 1 }, (_, i) => a + i), [a, b, list]);
   // What's typed shows at once; the saved log catches up a moment later (fast typing must never
   // land on a stale "next blank" question).
   const typedNow = useRef(new Map<string, AnswerRec>());

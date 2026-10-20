@@ -1,6 +1,8 @@
 // Your dates and times (spec: Your dates; Settings), the backup, the content file and the day-one check.
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { spentThisMonth } from "../core/tutor/cost";
+import { saveTutorCap, saveTutorEffort, saveTutorKey, tutorPrefs, type TutorPrefs } from "../data/tutorPrefs";
 import { go } from "../app/router";
 import { useApp } from "../app/store";
 import { DAY_NAMES, daysBetween, longDate, parseYmd, weekStartOf } from "../core/calendar";
@@ -185,6 +187,8 @@ export function SettingsScreen() {
 
         <div className="eyebrow" style={{ marginTop: 10 }}>Cards</div>
         <button className="btn small ghost" style={{ alignSelf: "flex-start" }} onClick={() => go("/cards/manage")}>Your cards: edit, pause or delete</button>
+        <div className="eyebrow" style={{ marginTop: 10 }}>Your tutor</div>
+        <TutorSettings say={say} />
         <div className="eyebrow" style={{ marginTop: 10 }}>Send to GMAT app</div>
         <Bookmarklet />
         <div className="eyebrow" style={{ marginTop: 10 }}>Backup</div>
@@ -222,3 +226,37 @@ export function SettingsScreen() {
 }
 
 export const shortDay = (day: string) => DAY_NAMES[parseYmd(day).getDay()];
+
+/** The tutor's key (this browser only), a monthly cap, and how hard it thinks. */
+function TutorSettings({ say }: { say: (m: string) => void }) {
+  const { d, today } = useApp();
+  const [p, setP] = useState<TutorPrefs | null>(null);
+  const [k, setK] = useState("");
+  useEffect(() => { void tutorPrefs().then(setP); }, []);
+  if (!p) return null;
+  const reload = () => void tutorPrefs().then(setP);
+  return (
+    <div style={{ display: "flex", flexDirection: "column" }}>
+      <Field label="Claude API key">
+        {p.key ? <>
+          <span className="mono" style={{ fontSize: 12 }}>…{p.key.slice(-4)}</span>
+          <button className="tiny back" onClick={async () => { await saveTutorKey(null); reload(); say("Key removed from this browser."); }}>remove</button>
+        </> : <>
+          <input type="password" value={k} onChange={(e) => setK(e.target.value)} placeholder="sk-ant-…" autoComplete="off" style={{ width: 200 }} />
+          <button className="btn small outline" style={{ height: 40 }} disabled={!k.trim().startsWith("sk-ant-")} onClick={async () => { await saveTutorKey(k); setK(""); reload(); say("Saved in this browser only."); }}>Save</button>
+        </>}
+      </Field>
+      <Field label="Monthly cap">
+        <select value={p.cap} onChange={async (e) => { await saveTutorCap(Number(e.target.value)); reload(); }}>
+          {[5, 10, 15, 20, 30, 50].map((n) => <option key={n} value={n}>${n}</option>)}
+        </select>
+      </Field>
+      <Field label="How hard it thinks">
+        <select value={p.effort} onChange={async (e) => { await saveTutorEffort(e.target.value as "medium" | "high"); reload(); }}>
+          <option value="medium">Normal</option><option value="high">Thorough (costs more)</option>
+        </select>
+      </Field>
+      <div className="tiny" style={{ padding: "6px 0" }}>This month: ${spentThisMonth(d.tutorSpend, today).toFixed(2)} of ${p.cap}. The key never goes into a backup.</div>
+    </div>
+  );
+}

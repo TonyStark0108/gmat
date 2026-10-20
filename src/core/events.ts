@@ -15,7 +15,7 @@ export type Tag =
 /** Work outside the plan: top-ups, help chips, the week's extra practice, drill repeats… */
 export interface ExtraSpec {
   id: string;
-  kind: "topup" | "extra" | "lean" | "help" | "careless" | "approach" | "keepsharp" | "rebuild";
+  kind: "topup" | "extra" | "lean" | "help" | "careless" | "approach" | "keepsharp" | "rebuild" | "tutor";
   week: string;                 // the study week it belongs to (its Monday)
   section: Section;
   topic: string | null;
@@ -26,7 +26,8 @@ export interface ExtraSpec {
       | { type: "video"; youtubeId: string; url: string }
       | { type: "link"; url: string }
       | { type: "cards"; topic: string }
-      | { type: "rc"; section: string };
+      | { type: "rc"; section: string }
+      | { type: "book"; book: BookId; qtype: string; numbers: number[] };
   refresher?: { type: "video"; youtubeId: string; url: string; title: string } | { type: "cards"; topic: string };
   hidden?: boolean;             // the week's extra chip waits until every required chip is done
   reason?: string;
@@ -94,7 +95,10 @@ export type EventBody =
   | { type: "mock.misses"; piece: string; misses: MockMiss[] }
   | { type: "booking"; answer: "notyet" | "booked"; date?: string }
   | { type: "test.result"; score: number | null }
-  | { type: "seen"; what: string };
+  | { type: "seen"; what: string }
+  // ---- the tutor (what it learns about you, and what it costs)
+  | { type: "tutor.note"; text: string }
+  | { type: "tutor.usage"; thread: string; model: string; input: number; output: number; cacheRead: number; cacheWrite: number; usd: number };
 
 export type ReviewStep = "retry" | "dots" | "last" | "key" | "answers" | "tags" | "close";
 export type MixChoice = "mix" | "quant" | "verbal" | "di";

@@ -14,6 +14,8 @@ import { ShareIn } from "./ui/Share";
 import { TaskRunner } from "./ui/tasks/TaskRunner";
 import { Week } from "./ui/Week";
 
+// the tutor (and the Claude library) loads only when you open it
+const TutorScreen = lazy(() => import("./ui/tutor/Tutor").then((m) => ({ default: m.TutorScreen })));
 const TimeMachine = import.meta.env.DEV ? lazy(() => import("./ui/TimeMachine").then((m) => ({ default: m.TimeMachine }))) : null;
 
 export function App() {
@@ -47,5 +49,6 @@ export function App() {
   if (path === "/life") return <Life />;
   if (path === "/share") return <ShareIn params={params} />;
   if (path === "/settings") return <SettingsScreen />;
+  if (path === "/tutor") return <Suspense fallback={null}><TutorScreen key={params.toString()} params={params} /></Suspense>;
   return <Home />;
 }

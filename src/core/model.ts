@@ -8,7 +8,7 @@ import { plusDays, studyDay, weekCapacity, weekStartOf } from "./calendar";
 import { buildCards, dueCards, introduceThisWeek, type StudyCard } from "./cards";
 import type { Content, Section } from "./content";
 import type { AppEvent, EventBody, ExtraSpec } from "./events";
-import { buildExtras, extrasFor, reserveCr, reserveCrPiece, type ExtraPiece } from "./extras";
+import { buildExtras, extrasFor, reserveCr, reserveCrPiece, specToPiece, type ExtraPiece } from "./extras";
 import { dateCheck, targetDate } from "./life";
 import { boughtExams36, endPhase, isReady, mockResults, type EndPhase, type MockResult } from "./mocks";
 import { planTasks, toPieces, type Piece } from "./pieces";
@@ -74,7 +74,8 @@ export function buildModel(content: Content, events: AppEvent[], now: Date, onli
   const weekStart = weekStartOf(today);
   const reserve = reserveCr(content, d, today);
   const done = [...d.done].filter((id) => id.startsWith("x:reserve:")).map((id) => reserveCrPiece(content, id)).filter(Boolean) as ExtraPiece[];
-  const reviews = buildReviews({ content, pieces: [...plan, ...reserve, ...done], d, today, bookEditionMatches: s.bookEdition === "2025–2026" });
+  const tutorSets = [...d.extras.values()].filter((x) => x.kind === "tutor" && x.open.type === "book").map((x) => specToPiece(x, x.addedDay));
+  const reviews = buildReviews({ content, pieces: [...plan, ...reserve, ...done, ...tutorSets], d, today, bookEditionMatches: s.bookEdition === "2025–2026" });
   const extras = [...buildExtras(content, plan, d, reviews, today), ...reserve, ...done];
   const byId = new Map<string, Piece>([...plan.map((p) => [p.id, p] as const), ...extras.map((x) => [x.id, x as Piece] as const)]);
   const week = weekPlanOf(d, weekStart, d.settings);

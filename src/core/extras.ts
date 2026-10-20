@@ -34,7 +34,8 @@ function piece(t: Task, x: Omit<ExtraPiece, keyof Piece | "extra"> & { order?: n
   const deskOnly = t.needs_desk;
   return {
     id: `${t.id}#0`, taskId: t.id, task: t, index: 0, of: 1, order: x.order ?? 1e6, planWeek: t.plan_week, section: t.section,
-    group: groupOf(t.section), minutes: t.est_minutes, review: 0, count: (t.pointer.count as number | undefined) ?? undefined,
+    group: groupOf(t.section), minutes: t.est_minutes, review: Math.round(t.est_minutes / 3), count: (t.pointer.count as number | undefined) ?? undefined,
+    numbers: t.pointer.numbers ?? undefined,
     deskOnly, busOk: !deskOnly, offlineOk: t.offline_ok, last: true, extra: true,
     xkind: x.xkind, week: x.week, availableFrom: x.availableFrom, hidden: x.hidden, spec: x.spec, reason: x.reason,
   };
@@ -48,7 +49,11 @@ export function specToPiece(s: ExtraSpec, addedDay: string): ExtraPiece {
   else if (o.type === "video") t = synthTask(id, s.section, "video", s.title, s.minutes, { type: "video", youtube_id: o.youtubeId, url: o.url });
   else if (o.type === "link") t = synthTask(id, s.section, "article", s.title, s.minutes, { type: "url", url: o.url });
   else if (o.type === "cards") t = synthTask(id, s.section, "cards", s.title, s.minutes, { type: "cards", topic: o.topic });
-  else t = synthTask(id, s.section, "rc_section", s.title, s.minutes, { type: "lsat_rc", section: o.section, count: 0 });
+  else if (o.type === "book") {
+    const nums = [...o.numbers].sort((a, b) => a - b);
+    t = synthTask(id, s.section, "og_set", s.title, s.minutes, { type: "og_block", book: o.book, qtype: o.qtype as never, list: nums, numbers: [nums[0], nums[nums.length - 1]], count: nums.length });
+    t.offline_ok = true;
+  } else t = synthTask(id, s.section, "rc_section", s.title, s.minutes, { type: "lsat_rc", section: o.section, count: 0 });
   if (s.kind === "keepsharp" && o.type === "list") t.timed = true;
   return piece(t, { xkind: s.kind, week: s.week, availableFrom: addedDay, hidden: !!s.hidden, spec: s, reason: s.reason });
 }

@@ -21,6 +21,7 @@ export function titleOf(p: Piece): string {
   const t = p.task, ptr = t.pointer;
   switch (t.kind) {
     case "og_set": {
+      if (p.extra && t.title) return t.title;
       const book = BOOK_NAMES[ptr.book ?? "og"];
       const what = QTYPE[ptr.qtype ?? ""] ?? "";
       const half = p.of > 1 ? (p.index === 0 ? ", first half" : ", second half") : "";
@@ -41,6 +42,10 @@ export function titleOf(p: Piece): string {
 
 export function pointerOf(p: Piece, content: Content | null = null): string {
   const t = p.task, ptr = t.pointer;
+  if (t.kind === "og_set" && Array.isArray(ptr.list)) {
+    const list = ptr.list as number[];
+    return `${BOOK_NAMES[ptr.book ?? "og"]} · questions ${list.join(", ")}`;
+  }
   if (t.kind === "og_set" && p.numbers) {
     const [a, b] = p.numbers;
     const qs = `questions ${a}–${b}`;

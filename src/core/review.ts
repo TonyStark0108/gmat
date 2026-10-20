@@ -158,7 +158,8 @@ function setItems(inp: ReviewInput, task: Task, ps: Piece[], setDay: string): It
     for (const p of ps) {
       const range = task.kind === "og_set" ? p.numbers : task.pointer.recipe!.find((r) => r.numbers)!.numbers;
       if (!range) continue;
-      for (let n = range[0]; n <= range[1]; n++) {
+      const list = (task.pointer.list as number[] | undefined) ?? Array.from({ length: range[1] - range[0] + 1 }, (_, i) => range[0] + i);
+      for (const n of list) {
         const bq = qs.find((x) => x.n === n);
         const qtype = bq?.section ?? task.pointer.qtype ?? "PS";
         const a = ans(p, String(n));

@@ -81,6 +81,8 @@ export interface Derived {
   booking: Of<"booking">[];
   testResult: { score: number | null; ts: number } | null;
   seen: Map<string, number>;
+  tutorNotes: { text: string; ts: number; day: string }[];
+  tutorSpend: Map<string, number>;       // "2026-12" -> US dollars
   eventCount: number;
 }
 
@@ -100,7 +102,7 @@ export function derive(events: AppEvent[], sectionOf: (pieceId: string) => Secti
     cardDeleted: new Set(), cardSessions: [],
     datechecks: [], letgo: new Map(), extras: new Map(), offers: new Map(), offersAt: new Map(), shared: [], deadLinks: new Map(),
     crSwaps: [], videoChecks: new Map(), mockMoved: new Map(), mockMisses: new Map(), booking: [], testResult: null,
-    seen: new Map(), eventCount: events.length,
+    seen: new Map(), tutorNotes: [], tutorSpend: new Map(), eventCount: events.length,
   };
   const life: LifeBlock[] = [];
   const seen = (piece: string, day: string) => {
@@ -217,6 +219,8 @@ export function derive(events: AppEvent[], sectionOf: (pieceId: string) => Secti
       case "booking": d.booking.push(e); if (e.answer === "booked" && e.date) d.settings = { ...d.settings, testDate: e.date }; break;
       case "test.result": d.testResult = { score: e.score, ts: e.ts }; break;
       case "seen": if (!d.seen.has(e.what)) d.seen.set(e.what, e.ts); break;
+      case "tutor.note": d.tutorNotes.push({ text: e.text, ts: e.ts, day: e.day }); break;
+      case "tutor.usage": d.tutorSpend.set(e.day.slice(0, 7), (d.tutorSpend.get(e.day.slice(0, 7)) ?? 0) + e.usd); break;
     }
   }
   if (life.length) d.settings = { ...d.settings, life: [...(d.settings.life ?? []), ...life] };

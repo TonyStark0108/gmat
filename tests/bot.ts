@@ -21,7 +21,14 @@ export class Bot {
   snapshots: { day: string; pct: number; hours: number; weeks: number; level: number; retired: number }[] = [];
 
   section: string = "quant";
+  difficulty: string | null = null;
   topups = 0;
+  /** Optional: a learning student. Accuracy from the section and the question's difficulty, right now. */
+  accuracyFn?: (section: string, difficulty: string | null) => number;
+  /** Optional: scores for an official mock, from the student's ability at the time. */
+  mockScores?: (p: Piece, t: Date) => Record<string, number>;
+  /** Minutes of work per section (reviews, redos and cards included), for a learning model. */
+  minutes: Record<string, number> = {};
   constructor(public content: Content, seed = 7, public accuracy = 0.75, public bySection: Record<string, number> = {}) {
     let s = seed;
     this.rnd = () => { s = (s * 1103515245 + 12345) % 2147483648; return s / 2147483648; };
@@ -50,7 +57,8 @@ export class Bot {
     this.rec(t, { type: "setup.done" });
   }
 
-  private acc() { return this.bySection[this.section] ?? this.accuracy; }
+  private acc() { return this.accuracyFn ? this.accuracyFn(this.section, this.difficulty) : this.bySection[this.section] ?? this.accuracy; }
+  private spend(section: string, minutes: number) { this.minutes[section] = (this.minutes[section] ?? 0) + minutes; }
   private letter(key: unknown): string {
     const right = this.rnd() < this.acc();
     if (right && typeof key === "string") return key;
@@ -97,6 +105,7 @@ export class Bot {
         const cs = sessionCards(m.cards, t.getTime());
         for (const c of cs) this.rec(t, { type: "card.rated", card: c.id, rating: this.rnd() < 0.8 ? "good" : "again" });
         this.rec(t, { type: "cards.session", count: cs.length, where });
+        this.spend("cards", 10);
         this.rec(t, { type: "time", minutes: 10, where, source: "cards" });
         return cs.length ? 10 : 0;
       }
@@ -113,7 +122,9 @@ export class Bot {
     if (k === "og_set" && p.numbers) {
       const book = p.task.pointer.book ?? "og";
       for (let n = p.numbers[0]; n <= p.numbers[1]; n++) {
-        const key = books[book]?.questions.find((q) => q.n === n)?.answer;
+        const bq = books[book]?.questions.find((q) => q.n === n);
+        const key = bq?.answer;
+        this.difficulty = bq?.difficulty?.toLowerCase() ?? null;
         this.rec(t, { type: "answer", piece: p.id, q: n, value: this.answerFor(key), unsure: this.rnd() < 0.1, sinceStartMs: (n - p.numbers[0] + 1) * 110_000 });
       }
       this.rec(t, { type: "piece.submitted", piece: p.id, wrongOrUnsure: 0, answered: p.numbers[1] - p.numbers[0] + 1 });
@@ -134,10 +145,12 @@ export class Bot {
       const right = Math.round(c * this.acc());
       this.rec(t, { type: "outside", piece: p.id, right, wrong: c - right, unsure: 0 });
     } else if (k === "mock") {
-      this.rec(t, { type: "outside", piece: p.id, scores: { total: 615, quant: 78, verbal: 84, di: 74 } });
+      this.rec(t, { type: "outside", piece: p.id, scores: this.mockScores?.(p, t) ?? { total: 615, quant: 78, verbal: 84, di: 74 } });
     } else if (k === "admin") {
       this.rec(t, { type: "admin", piece: p.id, answer: "done" });
     }
+    this.difficulty = null;
+    this.spend(p.section, k === "mock" ? 135 : p.minutes);
     this.rec(t, { type: "time", minutes: k === "mock" ? 135 : p.minutes, where, piece: p.id, source: k });
     this.rec(t, { type: "piece.done", piece: p.id });
     return k === "mock" ? 135 : Math.max(5, p.minutes);
@@ -164,6 +177,7 @@ export class Bot {
       this.rec(t, { type: "review.tag", item: it.id, tag, line: this.rnd() < 0.3 ? "Read what's asked first" : undefined });
     }
     this.rec(t, { type: "review.done", review: id });
+    this.spend(s.section, s.minutes);
     this.rec(t, { type: "time", minutes: s.minutes, where, source: "review" });
     // the close offers a top-up after a rough set: take every other one
     const m2 = buildModel(this.content, this.events, t);
@@ -191,6 +205,7 @@ export class Bot {
       this.rec(t, { type: "review.answer", review: id, item: x, attempt: "mixed", value });
     }
     this.rec(t, { type: "review.done", review: id });
+    for (const x of ids) this.spend(m.reviews.items.get(x)!.section, 3);
     this.rec(t, { type: "time", minutes: ids.length * 3, where, source: "mixed review" });
     return Math.max(5, ids.length * 3);
   }

@@ -131,6 +131,7 @@ function MockAfter({ piece, onDone }: { piece: Piece; onDone: (l: Logged | null)
           weakTopics.map((t) => <TopupOffer key={t} offer={{ id: `topup:mock:${piece.id}:${t}`, topic: t, section: weakSection === "di" ? "di" : weakSection === "quant" ? "quant" : t === "cr" ? "cr" : "rc", wrong: misses.filter((x) => x.topic === t).length, total: misses.length, cause: "concept", line: "" }} />)
         )}
         <div className="spacer" />
+        {res?.official && <button className="btn small outline" onClick={() => go(`/tutor?ctx=${encodeURIComponent(`mock:${piece.id}`)}`)}>Debrief with your tutor</button>}
         <button className="btn" onClick={() => onDone(null)}>Back to today</button>
       </div>
     </Screen>

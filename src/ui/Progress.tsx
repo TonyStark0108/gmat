@@ -8,6 +8,7 @@ import { shortDate } from "../core/calendar";
 import { climb, milestones, readingSetsLeft, sectionBars, whatsLeftFor } from "../core/milestones";
 import { LEVELS } from "../core/progress";
 import { TARGET } from "../core/settings";
+import { go } from "../app/router";
 import { Back, Screen } from "./bits";
 
 export function ProgressScreen() {
@@ -114,6 +115,7 @@ export function ErrorsScreen() {
             <div style={{ fontSize: 19 }}>{g.heading}</div>
             <div className="small">{g.detail}</div>
             {g.resting && <div className="tiny">Back to this in 10 days ({shortDate(g.resting)}).</div>}
+            {g.topic !== "mixed" && <button className="back" style={{ color: "var(--link)" }} onClick={() => go(`/tutor?ctx=${encodeURIComponent(`topic:${g.topic}`)}`)}>Ask the tutor to teach this</button>}
           </div>
         ))}
         <div className="tiny">Headlines are what happened, in your own words where you wrote some.</div>

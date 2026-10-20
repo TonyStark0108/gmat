@@ -14,3 +14,4 @@ GMAT Screens and Flows.pdf
 *.tsbuildinfo
 /e2e-report/
 /test-results/
+/analysis/

@@ -141,6 +141,12 @@ a { color: var(--link); }
 
 .pulse { display: inline-block; animation: pulse 1.4s cubic-bezier(.2, .8, .3, 1); }
 @keyframes pulse { 0% { transform: scale(1) } 30% { transform: scale(1.35) } 100% { transform: scale(1) } }
+/* the tutor */
+.tutor-grid { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; flex: 1; min-height: 0; }
+.bubble { border-radius: 14px; padding: 10px 14px; max-width: 92%; }
+.bubble.you { align-self: flex-end; background: var(--soft); border: 1.5px solid var(--line); font-family: var(--read); font-size: 16px; white-space: pre-wrap; }
+.bubble.tutor { align-self: flex-start; background: #fff; border: 1.5px solid var(--line-2); }
+@media (max-width: 900px) { .tutor-grid { grid-template-columns: 1fr; } .tutor-grid aside { max-height: 170px; } }
 @keyframes rise { from { opacity: 0; transform: translateY(14px) } to { opacity: 1; transform: none } }
 @keyframes fill { from { transform: scaleX(0) } to { transform: scaleX(1) } }
 @keyframes pop { 0% { transform: scale(.4); opacity: 0 } 60% { transform: scale(1.12); opacity: 1 } 100% { transform: scale(1); opacity: 1 } }
