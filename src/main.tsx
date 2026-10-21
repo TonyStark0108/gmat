@@ -7,20 +7,17 @@ import "./styles.css";
 
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { registerSW } from "virtual:pwa-register";
 import { App } from "./App";
 import { AppProvider } from "./app/store";
 import { setClockOffset } from "./core/clock";
 import { Boundary } from "./ui/Boundary";
 import { FocusProvider } from "./ui/focus";
+import { UpdateChip } from "./ui/UpdateChip";
 
 if (import.meta.env.DEV) {
   const off = Number(localStorage.getItem("gmat-dev-offset") ?? 0);
   if (off) setClockOffset(off);
 }
-
-// New versions install in the background and take over on the next launch.
-registerSW({ immediate: true });
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -28,6 +25,7 @@ createRoot(document.getElementById("root")!).render(
       <FocusProvider>
         <Boundary>
           <App />
+          <UpdateChip />
         </Boundary>
       </FocusProvider>
     </AppProvider>

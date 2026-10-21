@@ -152,6 +152,9 @@ a { color: var(--link); }
 @keyframes pop { 0% { transform: scale(.4); opacity: 0 } 60% { transform: scale(1.12); opacity: 1 } 100% { transform: scale(1); opacity: 1 } }
 @keyframes breathe { 0%, 100% { opacity: .35; transform: scale(1) } 50% { opacity: 1; transform: scale(1.35) } }
 @keyframes toast { 0% { opacity: 0; transform: translate(-50%, 10px) } 12%, 85% { opacity: 1; transform: translate(-50%, 0) } 100% { opacity: 0; transform: translate(-50%, 0) } }
+.update-chip { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 70; display: flex; gap: 14px; align-items: center; background: var(--card); border: 2px solid var(--ink); border-radius: 16px; padding: 8px 8px 8px 16px; font-size: 17px; width: max-content; max-width: calc(100vw - 32px); animation: rise .25s ease both; }
+.update-chip .btn.small { height: 40px; padding: 0 18px; }
+
 /* the map */
 .map-unit { background: var(--card); border: 2px solid var(--ink); border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
 .map-path { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 8px 0 4px; }
