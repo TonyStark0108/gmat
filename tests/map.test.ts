@@ -51,7 +51,8 @@ describe("the map", () => {
   });
 
   it("later weeks stay closed and can't be started; levels sit after the weeks that unlock them", () => {
-    const C = realContent() ?? fixtureContent();
+    // without the content file (CI), a fixture with a later week
+    const C = realContent() ?? fixtureContent([task({ id: "wk3", section: "cr", kind: "cr_set", plan_week: 3, pointer: { type: "lsat_cr", set: "c1", count: 5 } })]);
     const map = buildMap(buildModel(C, setup().events, new Date("2026-12-07T08:00")), null);
     const later = map.units.filter((u) => u.week > map.currentWeek);
     expect(later.length).toBeGreaterThan(0);
