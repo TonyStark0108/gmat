@@ -6,6 +6,7 @@ import { CardSession, ManageCards } from "./ui/Cards";
 import { DayOne, LoadContent, Setup, dayOnePassed } from "./ui/FirstRun";
 import { Home } from "./ui/Home";
 import { Life } from "./ui/Life";
+import { MapScreen } from "./ui/Map";
 import { ErrorsScreen, ProgressScreen } from "./ui/Progress";
 import { MixedReviewScreen } from "./ui/review/MixedReview";
 import { SetReviewScreen } from "./ui/review/SetReview";
@@ -46,6 +47,7 @@ export function App() {
   if (path === "/cards/manage") return <ManageCards />;
   if (path === "/week") return <Week />;
   if (path === "/progress") return <ProgressScreen />;
+  if (path === "/map") return <MapScreen />;
   if (path === "/errors") return <ErrorsScreen />;
   if (path === "/log") return <QuestionLog />;
   if (path === "/life") return <Life />;

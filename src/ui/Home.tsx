@@ -155,6 +155,7 @@ export function Home() {
         </div>
         <nav className="row" style={{ justifyContent: "space-between", borderTop: "1.5px solid var(--line)", paddingTop: 4 }}>
           <NavLink to="/week" label="This week" />
+          <NavLink to="/map" label="Map" />
           <NavLink to="/progress" label="Progress" />
           <NavLink to="/errors" label="What to work on" />
           <NavLink to="/tutor" label="Tutor" />
