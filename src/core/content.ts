@@ -3,7 +3,8 @@
 export type Section = "quant" | "di" | "rc" | "cr" | "mock" | "general";
 export type Kind =
   | "video" | "article" | "rc_section" | "og_set" | "drill" | "di_set" | "cr_set"
-  | "gmatclub_set" | "mock" | "cards" | "admin" | "test_prep";
+  | "gmatclub_set" | "mock" | "cards" | "admin" | "test_prep"
+  | "recall";                 // the app's own: your error log, from memory
 export type Optionality = "core" | "recommended" | "optional" | "very optional" | "setting";
 export type BookId = "og" | "qr" | "vr" | "dir";
 export type QType = "PS" | "DS" | "TPA" | "RC" | "CR";

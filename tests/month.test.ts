@@ -99,7 +99,9 @@ describe.skipIf(!C)("a simulated month (Phase 2 check)", () => {
     expect(end.reviews.sets.filter((s) => s.status === "done").length).toBeGreaterThan(5);
     expect(end.reviews.retired).toBeGreaterThan(0);
     expect(end.d.cardSessions.length).toBeGreaterThan(3);
-    expect(end.d.introduced.size).toBeGreaterThanOrEqual(15 * 4);
+    // new cards keep coming: starter cards, and the cards from each day's work (paused while cards pile up)
+    expect(end.d.introduced.size + end.d.offered.size).toBeGreaterThanOrEqual(15 * 4);
+    expect(end.cardsDue).toBeLessThan(80);
     expect(bot.cardsSeen.some((c) => c.card === "mixed")).toBe(true);
     for (const it of end.reviews.items.values()) if (it.state === "stubborn") expect(it.misses).toBeGreaterThanOrEqual(3);
   });

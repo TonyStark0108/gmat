@@ -5,14 +5,22 @@
 import { useMemo, useState } from "react";
 import { go } from "../app/router";
 import { useApp } from "../app/store";
-import { sessionCards, type StudyCard } from "../core/cards";
+import { dueCards, sessionCards, type StudyCard } from "../core/cards";
+import { recapCards } from "../core/recall";
 import { record } from "../data/db";
 import { Back, Screen, useKeys } from "./bits";
 import { useTaskTime } from "./focus";
 
-export function CardSession({ topic, piece }: { topic?: string; piece?: string }) {
-  const { m, bus, now } = useApp();
-  const list = useMemo(() => sessionCards(m.cards, now.getTime(), m.adapt.weight, topic), []); // eslint-disable-line react-hooks/exhaustive-deps
+export const WARMUP_SIZE = 5;
+export const WARMUP_MIN = 3;      // with fewer due than this, a sitting starts straight away
+
+/**
+ * A session. `warm`: a few due cards before the first piece of a sitting, then on to `then`.
+ * `recap`: the week's own cards, mixed (the Saturday recap).
+ */
+export function CardSession({ topic, piece, recap, warm, then }: { topic?: string; piece?: string; recap?: string; warm?: boolean; then?: string }) {
+  const { m, bus, now, today } = useApp();
+  const list = useMemo(() => (recap ? recapCards(m.cards, recap) : warm ? dueCards(m.cards, now.getTime()).slice(0, WARMUP_SIZE) : sessionCards(m.cards, now.getTime(), m.adapt.weight, topic)), []); // eslint-disable-line react-hooks/exhaustive-deps
   const [queue, setQueue] = useState<StudyCard[]>(list);
   const [again, setAgain] = useState<Set<string>>(new Set());
   const [back, setBack] = useState(false);
@@ -34,10 +42,11 @@ export function CardSession({ topic, piece }: { topic?: string; piece?: string }
     time.poke();
   };
   const finish = async () => {
-    await record({ type: "cards.session", count: done, where: bus ? "bus" : "desk" });
+    if (done || !warm) await record({ type: "cards.session", count: done, where: bus ? "bus" : "desk" });
     if (piece && !m.d.done.has(piece)) await record({ type: "piece.done", piece });
+    if (warm) await record({ type: "seen", what: `warmup:${today}` });
     time.flush();
-    go("/");
+    go(then ?? "/");
   };
   useKeys({
     " ": () => { if (c && !editing) setBack(true); },
@@ -46,6 +55,7 @@ export function CardSession({ topic, piece }: { topic?: string; piece?: string }
     Enter: () => { if (!c) void finish(); },
   }, [c?.id, back, editing, done]);
 
+  if (!list.length && warm) { void finish(); return null; }
   if (!list.length) {
     return <Screen><div className="column"><Back /><div className="title">No cards yet.</div>
       <div className="muted" style={{ fontSize: 17 }}>They come from the starter decks and from the lines you write after a review or a video.</div></div></Screen>;
@@ -54,17 +64,20 @@ export function CardSession({ topic, piece }: { topic?: string; piece?: string }
     return (
       <Screen><div className="column">
         <div className="eyebrow">Cards</div>
-        <div className="title">That's the session.</div>
+        <div className="title">{warm ? "Warmed up." : recap ? "That's the week's recap." : "That's the session."}</div>
         <div className="spacer" />
-        <button className="btn" autoFocus onClick={() => void finish()}>Back to today</button>
+        <button className="btn" autoFocus onClick={() => void finish()}>{warm ? "On to the next thing" : "Back to today"}</button>
       </div></Screen>
     );
   }
   return (
     <Screen>
       <div className="column">
-        <Back label="← Today · pause" onClick={() => void finish()} />
-        <div className="eyebrow" style={{ color: "var(--rc-d)" }}>Cards{c.source === "error" ? " · from a review" : c.source === "video" ? " · from a video" : c.source === "method" ? " · method" : ""}</div>
+        <div className="row" style={{ justifyContent: "space-between" }}>
+          <Back label={warm ? "Skip the warm-up" : "← Today · pause"} onClick={() => void finish()} />
+          {(warm || recap) && <span className="tiny">{list.length - queue.length + 1} of {list.length}</span>}
+        </div>
+        <div className="eyebrow" style={{ color: "var(--rc-d)" }}>{warm ? "Warm-up · " : recap ? "This week's recap · " : ""}Cards{c.source === "error" ? " · from a review" : c.source === "video" ? " · from a video" : c.source === "method" ? " · method" : c.source === "topic" ? " · a rule" : ""}</div>
         <div className="card" style={{ border: "2px dashed var(--rc)", boxShadow: "6px 6px 0 var(--rc-t)", minHeight: 260, justifyContent: "center" }}>
           <div className="reading" style={{ fontSize: 24, fontFamily: c.source === "quant facts" ? "var(--mono)" : "var(--read)" }}>{front}</div>
           {back && <div className="reading" style={{ fontSize: 21, borderTop: "1.5px solid var(--line)", paddingTop: 12, color: "var(--ink-2)" }}>{c.back}</div>}

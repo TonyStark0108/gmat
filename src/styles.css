@@ -155,7 +155,16 @@ a { color: var(--link); }
 .update-chip { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 70; display: flex; gap: 14px; align-items: center; background: var(--card); border: 2px solid var(--ink); border-radius: 16px; padding: 8px 8px 8px 16px; font-size: 17px; width: max-content; max-width: calc(100vw - 32px); animation: rise .25s ease both; }
 .update-chip .btn.small { height: 40px; padding: 0 18px; }
 
+/* worth another look */
+.star { flex: none; height: 48px; min-width: 34px; padding: 0 6px; border: none; background: transparent; color: var(--faint); font-size: 20px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.star.on { color: var(--cr); }
+.star span { font: 400 12px var(--mono); color: var(--ink-2); }
+.star:focus-visible { outline: 2px solid var(--ink); border-radius: 8px; }
+
 /* the map */
+.map-covered { all: unset; cursor: pointer; box-sizing: border-box; width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 14px; border: 1.5px solid var(--line-2); border-radius: 12px; font-size: 15px; color: var(--ink-2); }
+.map-covered:hover, .map-covered:focus-visible { border-color: var(--ink); }
 .map-unit { background: var(--card); border: 2px solid var(--ink); border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
 .map-path { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 8px 0 4px; }
 .map-node { width: 60px; height: 60px; padding: 0; box-sizing: border-box; flex-shrink: 0; border-radius: 50%; border: 2.5px solid var(--c); background: var(--t); color: var(--c); font: 400 24px var(--hand); cursor: pointer; display: grid; place-items: center; box-shadow: 0 4px 0 var(--d); transition: transform .15s; }

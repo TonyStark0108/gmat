@@ -23,14 +23,14 @@ export function MixedReviewScreen({ id }: { id: string }) {
   const time = useTaskTime(id, bus ? "bus" : "desk", "mixed review");
   if (!started) return <Screen><Back /><div className="t">This review isn't here any more.</div></Screen>;
   const items = started.items.map((x) => m.reviews.items.get(x)).filter(Boolean) as Item[];
-  const answered = (it: Item) => (d.attempts.get(it.id) ?? []).some((a) => a.review === id && a.attempt === "mixed");
+  const answered = (it: Item) => (d.attempts.get(it.id) ?? []).some((a) => a.review === id && (a.attempt === "mixed" || a.attempt === "recall"));
   const cur = items.find((it) => !answered(it) || !closedHere(it, id, d));
   if (!cur) return <Finished id={id} items={items} onLeave={() => time.flush()} />;
   return (
     <Screen wide={cur.source === "rc"}>
       <div className="column" style={cur.source === "rc" ? { maxWidth: "none" } : undefined}>
         <Back label="← Today · pause" onClick={() => { time.flush(); go("/"); }} />
-        <div className="eyebrow">Mixed review · {items.indexOf(cur) + 1} of {items.length}</div>
+        <div className="eyebrow">{id.startsWith("recall:") ? "Your error log, again" : "Mixed review"} · {items.indexOf(cur) + 1} of {items.length}</div>
         <One key={cur.id} it={cur} review={id} />
       </div>
     </Screen>
@@ -44,22 +44,27 @@ function closedHere(it: Item, review: string, d: ReturnType<typeof useApp>["d"])
 
 function One({ it, review }: { it: Item; review: string }) {
   const { d, m, content } = useApp();
+  const recall = review.startsWith("recall:");
+  const attempt = recall ? "recall" : "mixed";
   const k = SUBJECT[it.section];
   const [pick, setPick] = useState<Answer>(null);
   const [needKey, setNeedKey] = useState(false);
   const [tag, setTag] = useState<Tag | null>(it.tag ?? null);
   const [line, setLine] = useState("");
-  const att = (d.attempts.get(it.id) ?? []).filter((x) => x.review === review && x.attempt === "mixed").pop();
+  const att = (d.attempts.get(it.id) ?? []).filter((x) => x.review === review && x.attempt === attempt).pop();
   const wasRight = att ? (att.right ?? (it.key !== undefined && it.key !== null && markOne(att.value, it.key as string | number[]) === "right")) : null;
   useEffect(() => { setPick(null); setNeedKey(false); }, [it.id]);
 
   const answer = async (value: Answer, right?: boolean) => {
     if (it.key === undefined && it.source !== "share" && it.source !== "log" && right === undefined) { setPick(value); setNeedKey(true); return; }
-    await record({ type: "review.answer", review, item: it.id, attempt: "mixed", value, right });
+    await record({ type: "review.answer", review, item: it.id, attempt, value, right });
+    // practice: a right one that slips here comes back for another look
+    const ok = right ?? (it.key !== undefined && it.key !== null && markOne(value, it.key as string | number[]) === "right");
+    if (recall && !ok && (it.state === "look" || it.state === "looked" || it.state === "retired")) await record({ type: "look", item: it.id, on: true });
   };
   const next = async () => {
-    if (wasRight === false && !tag) return;
-    if (wasRight === false && tag) {
+    if (wasRight === false && !tag && !recall) return;
+    if (wasRight === false && tag && !recall) {
       await record({ type: "review.tag", item: it.id, tag, line: line.trim() || undefined });
       if (line.trim()) await record({ type: "line", source: `review:${it.id}`, text: line.trim(), front: errorFront(it.section, it.topic, tag), topic: it.topic, section: it.section });
     }
@@ -78,7 +83,9 @@ function One({ it, review }: { it: Item; review: string }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <div className="ptr" style={{ background: k.t }}>{it.label}</div>
         {wasRight ? (
-          now.state === "retired"
+          recall ? <div className="title" style={{ fontSize: 28 }}>Right.</div>
+          : now.state === "looked" ? <div className="title" style={{ fontSize: 28 }}>Right again. That one's off the list.</div>
+          : now.state === "retired"
             ? <div className="title" style={{ fontSize: 28 }}>{m.reviews.retired} retired. {topicName(it.topic)}, the one from {shortDate(it.setDay)}. Right twice, a week or more apart.</div>
             : <div className="title" style={{ fontSize: 28 }}>Right.</div>
         ) : (
@@ -87,10 +94,11 @@ function One({ it, review }: { it: Item; review: string }) {
             <div className="title" style={{ fontSize: 28 }}>{now.key !== undefined ? <>Here it is: {showAnswer(now.key)}.</> : "Check the source's answer and explanation."}</div>
             {it.explanation && <div className="tiny">Where it's explained: {it.explanation}.</div>}
             <button className="back" style={{ color: "var(--link)" }} onClick={() => go(`/tutor?ctx=${encodeURIComponent(`item:${it.id}`)}`)}>Ask the tutor about this one</button>
-            <TagPick it={it} value={tag} line={line} onTag={setTag} onLine={setLine} />
+            {recall ? <div className="small">Practice: its regular review keeps its date.{it.state === "look" || it.state === "retired" ? " It comes back for another look." : ""}</div>
+              : <TagPick it={it} value={tag} line={line} onTag={setTag} onLine={setLine} />}
           </>
         )}
-        <button className="btn" disabled={wasRight === false && !tag} onClick={() => void next()}>Next</button>
+        <button className="btn" disabled={wasRight === false && !tag && !recall} onClick={() => void next()}>Next</button>
       </div>
     );
   }
@@ -116,7 +124,7 @@ function One({ it, review }: { it: Item; review: string }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div className="eyebrow" style={{ color: k.d }}>{k.name}{it.state === "stubborn" ? " · a stubborn one" : ""}</div>
+      <div className="eyebrow" style={{ color: k.d }}>{k.name}{it.state === "stubborn" ? " · a stubborn one" : it.state === "look" ? " · worth another look" : ""}</div>
       {(it.source === "book" || it.source === "log" || (it.source === "share" && !it.url)) && <div className="ptr" style={{ background: k.t, fontSize: 14 }}>{it.label}</div>}
       {(it.source === "cr" || ((it.source === "share" || it.source === "log") && it.url)) && <LinkOut url={it.url!} label={it.source === "cr" ? `Open CR question ${it.n}` : "Open the question"} color={{ c: k.c, d: k.d }} />}
       <div className="muted" style={{ fontSize: 16 }}>From scratch, as if you'd never seen it.</div>
@@ -132,7 +140,7 @@ function One({ it, review }: { it: Item; review: string }) {
             if (v === null) return;
             await record({ type: "key.entered", key: it.source === "cr" ? `cr:${it.url}` : `book:${it.book}:${it.n}`, value: v as string | number[] });
             setNeedKey(false);
-            await record({ type: "review.answer", review, item: it.id, attempt: "mixed", value: pick });
+            await record({ type: "review.answer", review, item: it.id, attempt, value: pick });
           }} />
         </div>
       ) : (
@@ -147,7 +155,12 @@ function One({ it, review }: { it: Item; review: string }) {
 
 function Finished({ id, items, onLeave }: { id: string; items: Item[]; onLeave: () => void }) {
   const { d, m } = useApp();
-  useEffect(() => { if (!d.reviewDone.has(id)) void record({ type: "review.done", review: id }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!d.reviewDone.has(id)) void record({ type: "review.done", review: id });
+    // the questions were the last part of "your error log, from memory"
+    const piece = id.startsWith("recall:") ? id.slice(7) : null;
+    if (piece && !d.done.has(piece)) void record({ type: "piece.done", piece });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const right = items.filter((it) => (d.attempts.get(it.id) ?? []).some((a) => a.review === id && (a.right ?? (it.key != null && markOne(a.value, it.key as string | number[]) === "right")))).length;
   const retiredHere = items.filter((it) => m.reviews.items.get(it.id)?.state === "retired" && m.reviews.items.get(it.id)?.retiredDay === m.today).length;
   useKeys({ Enter: () => { onLeave(); go("/"); } });

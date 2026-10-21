@@ -79,6 +79,13 @@ test("the Phase 1 checklist, end to end", async () => {
   // watch the videos that week 1's quant work waits on (no YouTube in the test: mark them watched)
   for (let i = 0; i < 4 && (await card(page).locator(".pill").first().textContent()) === "plays here"; i++) {
     await page.keyboard.press("Enter");
+    if (i === 0) {
+      // the first piece of the day at a desk starts with a few due cards; skippable
+      await expect(page.getByRole("button", { name: "Skip the warm-up" })).toBeVisible();
+      await expect(page.getByText("Warm-up · Cards")).toBeVisible();
+      await snap(page, "The first piece of the day starts with five due cards as a warm-up. One tap skips it.");
+      await page.getByRole("button", { name: "Skip the warm-up" }).click();
+    }
     await page.getByRole("button", { name: "Mark it watched" }).click();
     await expect(page.locator(".card")).toBeVisible();
   }

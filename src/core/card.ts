@@ -150,7 +150,7 @@ export function chooseCard(c: CardCtx): Card {
     if (!skipped.has("mixed")) {
       const items = mixedSession(R, c.d, c.today, { bus: c.bus, online: c.online, morning: slot?.kind === "morning" }, c.topicWeight);
       const fitsSlot = slot?.kind !== "morning" || (slot.minutesLeft > 10 && items.length * 3 <= slot.minutesLeft);
-      if (items.length && fitsSlot) return { kind: "mixed", items, returning: items.filter((it) => it.state === "return").length };
+      if (items.length && fitsSlot) return { kind: "mixed", items, returning: items.filter((it) => it.state === "return" || it.state === "look").length };
       const stubborn = mixedSession(R, c.d, c.today, { bus: c.bus, online: c.online, morning: slot?.kind === "morning" }, c.topicWeight, true);
       if (stubborn.length && fitsSlot && !skipped.has("stubborn")) return { kind: "mixed", items: stubborn, returning: 0, stubborn: true };
     }
@@ -158,10 +158,13 @@ export function chooseCard(c: CardCtx): Card {
   if (phase === "testweek") return due ? { kind: "cards", due, why: "end" } : { kind: "weekdone" };
   const redo = extras.find((x) => (x.xkind === "drill" || x.xkind === "passage") && !skipped.has(x.id) && fit(x) && x.availableFrom <= c.today);
   if (redo) return { kind: "redo", piece: redo };
+  // your error log, from memory (the week's, or the sweep before a mock): review work, so it comes before new work
+  const recall = extras.find((x) => x.xkind === "recall" && !skipped.has(x.id) && fit(x));
+  if (recall) return { kind: "task", piece: recall, next: null };
 
   // 4. Today's mix from this week's chips, and top-ups and help chips by their section.
   // In the last two weeks before the test: the last mock or a timed section, then light review.
-  const sideWork = extras.filter((x) => !x.hidden && !["drill", "passage", "extra"].includes(x.xkind) && !(phase === "taper" && x.xkind !== "keepsharp"));
+  const sideWork = extras.filter((x) => !x.hidden && !["drill", "passage", "extra", "recall"].includes(x.xkind) && !(phase === "taper" && x.xkind !== "keepsharp"));
   const pool = [...todo.filter((p) => phase !== "taper" || TIMED(p)), ...sideWork];
   const candidates = pool.filter((p) => ready(p, c) && fit(p) && p.task.kind !== "mock" && !skipped.has(p.id) && !skippedOut(c.d, p.id, c.week?.weekStart ?? c.today));
   if (!candidates.length && slot?.kind === "morning" && slot.minutesLeft > 10) {

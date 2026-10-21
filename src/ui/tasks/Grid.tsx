@@ -122,6 +122,7 @@ export function BookGrid({ piece, onDone, numbers, bookId, embedded, onSubmitted
                   );
                 })
               )}
+              <Star item={`${piece.taskId}|${n}`} />
               <button onClick={() => void put(n, c?.value ?? null, !c?.unsure)}
                 style={{ marginLeft: "auto", height: 48, minWidth: 64, padding: "0 8px", borderRadius: 9, border: "1.5px solid #e2ddd2", font: "400 10px var(--mono)", cursor: "pointer",
                   background: c?.unsure ? "var(--ink)" : "transparent", color: c?.unsure ? "var(--paper)" : "var(--muted)", whiteSpace: "nowrap" }}>
@@ -166,6 +167,17 @@ export function BookGrid({ piece, onDone, numbers, bookId, embedded, onSubmitted
         {body}
       </div>
     </Screen>
+  );
+}
+
+/** Worth another look: starred, it comes back a week later and again two weeks after that, even if it was right. */
+export function Star({ item, label, auto = false }: { item: string; label?: string; auto?: boolean }) {
+  const { d } = useApp();
+  const look = d.looks.get(item);
+  const on = look ? look.on : auto;    // auto: the app flagged it (right, but slow) until you say otherwise
+  return (
+    <button className={`star${on ? " on" : ""}`} aria-pressed={on} title={on ? "Worth another look: it'll come back" : "Worth another look? Star it and it comes back"}
+      aria-label={`${label ?? "This one"}: worth another look`} onClick={() => void record({ type: "look", item, on: !on })}>{on ? "★" : "☆"}{label ? <span>{label}</span> : null}</button>
   );
 }
 

@@ -7,6 +7,7 @@ import { go } from "../app/router";
 import { useApp } from "../app/store";
 import { chooseCard } from "../core/card";
 import { buildMap, type MapNode, type MapUnit } from "../core/map";
+import { coverage } from "../core/recall";
 import { cardContext } from "../core/model";
 import { record } from "../data/db";
 import { Back, Screen } from "./bits";
@@ -24,6 +25,7 @@ export function MapScreen() {
   const card = useMemo(() => chooseCard(cardContext(m, { bus, online }).ctx), [m, bus, online]);
   const nextPiece = "piece" in card ? card.piece.id : null;
   const map = useMemo(() => buildMap(m, nextPiece), [m, nextPiece]);
+  const cov = useMemo(() => coverage(m), [m]);
   const [openDone, setOpenDone] = useState<Set<number>>(new Set());
   const [peek, setPeek] = useState<Set<number>>(new Set());
   const [picked, setPicked] = useState<string | null>(null);
@@ -55,6 +57,10 @@ export function MapScreen() {
           </div>
         </div>
         <div className="bar" style={{ height: 8 }}><div style={{ width: `${m.pct}%`, background: "var(--ink)" }} /></div>
+        <button className="map-covered" onClick={() => go("/coverage")}>
+          <span>{cov.started} of {cov.total} topics started · {cov.missingCards.length ? `${cov.missingCards.length} without cards` : "every one has its cards"} · {cov.comingBack} {cov.comingBack === 1 ? "mistake" : "mistakes"} coming back{cov.look ? ` · ${cov.look} worth another look` : ""}{cov.confirmed ? ` · ${cov.confirmed} confirmed` : ""}</span>
+          <span className="tiny">what's covered →</span>
+        </button>
 
         {map.units.map((u) => {
           const isHere = u.state === "current" && u.week === map.currentWeek;

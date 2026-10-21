@@ -20,6 +20,7 @@ import { MockTask } from "./Mock";
 import { Outside } from "./Outside";
 import { RcReader } from "./RcReader";
 import { Video } from "./Video";
+import { RecallTask } from "./Recall";
 
 export interface Logged { toLookAgain: number; firstHalf?: boolean; note?: string; offer?: TopupOfferT }
 
@@ -47,7 +48,8 @@ export function TaskRunner({ pieceId }: { pieceId: string }) {
     case "video": return <Video piece={p} onDone={done} />;
     case "test_prep": return t.pointer.youtube_id ? <Video piece={p} onDone={done} /> : <Outside piece={p} onDone={done} />;
     case "cr_set": return <CrSet piece={p} onDone={done} />;
-    case "cards": return <CardSession piece={p.id} topic={t.pointer.topic as string | undefined} />;
+    case "cards": return <CardSession piece={p.id} topic={t.pointer.topic as string | undefined} recap={t.pointer.recap as string | undefined} />;
+    case "recall": return <RecallTask piece={p} />;
     case "mock": return t.pointer.type === "official_mock" ? <MockTask piece={p} onDone={done} /> : <Outside piece={p} onDone={done} />;
     default: return <Outside piece={p} onDone={done} />;
   }

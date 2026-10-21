@@ -15,7 +15,8 @@ export type Tag =
 /** Work outside the plan: top-ups, help chips, the week's extra practice, drill repeats… */
 export interface ExtraSpec {
   id: string;
-  kind: "topup" | "extra" | "lean" | "help" | "careless" | "approach" | "keepsharp" | "rebuild" | "tutor";
+  kind: "topup" | "extra" | "lean" | "help" | "careless" | "approach" | "keepsharp" | "rebuild" | "tutor"
+    | "check" | "timing" | "recall" | "recap";
   week: string;                 // the study week it belongs to (its Monday)
   section: Section;
   topic: string | null;
@@ -27,7 +28,9 @@ export interface ExtraSpec {
       | { type: "link"; url: string }
       | { type: "cards"; topic: string }
       | { type: "rc"; section: string }
-      | { type: "book"; book: BookId; qtype: string; numbers: number[] };
+      | { type: "book"; book: BookId; qtype: string; numbers: number[] }
+      | { type: "recall"; sweep?: string; bus: boolean }      // your error log from memory (weekly, or before a mock)
+      | { type: "recap"; week: string };                      // the week's cards, mixed
   refresher?: { type: "video"; youtubeId: string; url: string; title: string } | { type: "cards"; topic: string };
   hidden?: boolean;             // the week's extra chip waits until every required chip is done
   reason?: string;
@@ -65,7 +68,7 @@ export type EventBody =
   | { type: "admin"; piece: string; answer: "done" | "not now" }
   // ---- the review, redos and corrections (spec: After a set; The life of a wrong answer)
   | { type: "review.started"; review: string; items: string[] }
-  | { type: "review.answer"; review: string; item: string; attempt: "retry" | "last" | "mixed"; value: Answer; right?: boolean }
+  | { type: "review.answer"; review: string; item: string; attempt: "retry" | "last" | "mixed" | "recall"; value: Answer; right?: boolean }
   | { type: "review.step"; review: string; step: ReviewStep }
   | { type: "review.tag"; item: string; tag: Tag; line?: string }
   | { type: "review.done"; review: string }
@@ -79,6 +82,11 @@ export type EventBody =
   | { type: "card.paused"; card: string; paused: boolean }
   | { type: "card.deleted"; card: string }
   | { type: "cards.session"; count: number; where: Budget }
+  | { type: "cards.offered"; day: string; ids: string[] }                   // the day's new cards, offered once a day
+  | { type: "card.kept"; card: string; keep: boolean }                       // a suggested card: keep it or skip it
+  | { type: "card.drafted"; item: string; front: string; back: string }      // Claude's draft of a card from a mistake
+  // ---- worth another look: a question you got right that you want back (or one the app flags)
+  | { type: "look"; item: string; on: boolean }
   // ---- when life happens
   | { type: "lifeup"; kind: "tonight" | "weekend" | "week"; from: string; to: string }
   | { type: "datecheck"; week: string; result: "safe" | "risk" | "past"; projected: string | null; target: string | null; extra?: number | null; choice?: "move" | "keep" | "fit" | "later" }

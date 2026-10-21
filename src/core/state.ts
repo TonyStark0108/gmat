@@ -7,7 +7,7 @@ import { addDays, parseYmd, ymd } from "./calendar";
 
 export interface AnswerRec { value: Answer; unsure: boolean; sinceStartMs: number; ts: number; fixed?: boolean }
 export interface RcPlace { passage: number; stage: "read" | "prompt" | "questions"; q: number }
-export interface ReviewAttempt { attempt: "retry" | "last" | "mixed"; value: Answer; right?: boolean; ts: number; day: string; review: string }
+export interface ReviewAttempt { attempt: "retry" | "last" | "mixed" | "recall"; value: Answer; right?: boolean; ts: number; day: string; review: string }
 type Of<T extends AppEvent["type"]> = Extract<AppEvent, { type: T }>;
 
 export interface Derived {
@@ -54,7 +54,7 @@ export interface Derived {
   reviewDone: Map<string, { ts: number; day: string }>;
   reviewStep: Map<string, ReviewStep>;
   attempts: Map<string, ReviewAttempt[]>;   // item -> attempts in reviews
-  tags: Map<string, { tag: Tag; line?: string; ts: number }>;
+  tags: Map<string, { tag: Tag; line?: string; ts: number; day: string }>;
   keysEntered: Map<string, string | number[]>;
   keyOverrides: Map<string, string | number[]>;   // "og:47" -> book's answer
   bookChecks: Of<"book.check">[];
@@ -66,6 +66,11 @@ export interface Derived {
   cardPaused: Set<string>;
   cardDeleted: Set<string>;
   cardSessions: { ts: number; day: string; count: number }[];
+  cardKept: Map<string, { keep: boolean; ts: number; day: string }>;
+  offered: Map<string, string>;          // suggested card -> the day it was offered
+  offerDays: Set<string>;
+  drafts: Map<string, { front: string; back: string }>;
+  looks: Map<string, { on: boolean; ts: number; day: string }>;
   // life
   datechecks: Of<"datecheck">[];
   letgo: Map<string, boolean>;           // task -> keep?
@@ -101,7 +106,7 @@ export function derive(events: AppEvent[], sectionOf: (pieceId: string) => Secti
     reviewStarted: new Map(), reviewDone: new Map(), reviewStep: new Map(), attempts: new Map(), tags: new Map(),
     keysEntered: new Map(), keyOverrides: new Map(), bookChecks: [],
     introduced: new Map(), introWeeks: new Set(), cardRatings: new Map(), cardFront: new Map(), cardPaused: new Set(),
-    cardDeleted: new Set(), cardSessions: [],
+    cardDeleted: new Set(), cardSessions: [], cardKept: new Map(), offered: new Map(), offerDays: new Set(), drafts: new Map(), looks: new Map(),
     datechecks: [], letgo: new Map(), extras: new Map(), offers: new Map(), offersAt: new Map(), shared: [], qlogs: [], deadLinks: new Map(),
     crSwaps: [], videoChecks: new Map(), mockMoved: new Map(), mockMisses: new Map(), booking: [], testResult: null,
     seen: new Map(), restoredAt: null, tutorNotes: [], tutorSpend: new Map(), eventCount: events.length,
@@ -186,7 +191,7 @@ export function derive(events: AppEvent[], sectionOf: (pieceId: string) => Secti
         break;
       }
       case "review.step": d.reviewStep.set(e.review, e.step); break;
-      case "review.tag": d.tags.set(e.item, { tag: e.tag, line: e.line, ts: e.ts }); break;
+      case "review.tag": d.tags.set(e.item, { tag: e.tag, line: e.line, ts: e.ts, day: d.tags.get(e.item)?.day ?? e.day }); break;
       case "review.done": if (!d.reviewDone.has(e.review)) d.reviewDone.set(e.review, { ts: e.ts, day: e.day }); break;
       case "key.entered": d.keysEntered.set(e.key, e.value); break;
       case "key.override": d.keyOverrides.set(`${e.book}:${e.n}`, e.value); break;
@@ -206,6 +211,10 @@ export function derive(events: AppEvent[], sectionOf: (pieceId: string) => Secti
       case "card.paused": if (e.paused) d.cardPaused.add(e.card); else d.cardPaused.delete(e.card); break;
       case "card.deleted": d.cardDeleted.add(e.card); break;
       case "cards.session": d.cardSessions.push({ ts: e.ts, day: e.day, count: e.count }); break;
+      case "card.kept": d.cardKept.set(e.card, { keep: e.keep, ts: e.ts, day: e.day }); break;
+      case "cards.offered": d.offerDays.add(e.day); for (const id of e.ids) if (!d.offered.has(id)) d.offered.set(id, e.day); break;
+      case "card.drafted": d.drafts.set(e.item, { front: e.front, back: e.back }); break;
+      case "look": d.looks.set(e.item, { on: e.on, ts: e.ts, day: e.day }); break;
       // ---- life
       case "lifeup": life.push({ from: e.from, to: e.to, mode: e.kind === "week" ? "light" : "off" }); break;
       case "datecheck": d.datechecks.push(e); break;

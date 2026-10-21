@@ -88,6 +88,15 @@ export function Outside({ piece, onDone }: { piece: Piece; onDone: (l: Logged | 
         offer = { id: `topup:again:${piece.id}`, topic: spec.topic, section: piece.section, wrong: counts.wrong + counts.unsure, total, cause: "concept", line: "" };
       } else if (acc < 0.6) note = "This one rests for now. It's at the top of What to work on, back in 10 days.";
     }
+    if (spec?.kind === "check" && spec.topic && total) {
+      const acc = counts.right / total;
+      if (acc >= 0.8) note = `${counts.right} of ${total} on new questions. That's stuck.`;
+      else if (acc >= 0.6) note = `${counts.right} of ${total} on new questions. Getting there; it comes up again in your practice.`;
+      else if (m.adapt.history(m.weekStart).count(spec.topic) < 2) {
+        note = `${counts.right} of ${total} on new questions. One more go at it, easier ones first.`;
+        offer = { id: `topup:check:${piece.id}`, topic: spec.topic, section: piece.section, wrong: counts.wrong + counts.unsure, total, cause: "concept", line: "" };
+      } else note = `${counts.right} of ${total} on new questions. It rests for now and comes back in 10 days.`;
+    }
     onDone(isQuestions ? { toLookAgain: counts.wrong + counts.unsure, note, offer } : null);
   }
 

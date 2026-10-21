@@ -12,6 +12,7 @@ import type { Answer, ReviewStep, Tag } from "../../core/events";
 import { markOne, inWords } from "../../core/grid";
 import { closeOf } from "../../core/results";
 import { topupOffers, type TopupOffer as Offer } from "../../core/adapt";
+import { topicName } from "../../core/topics";
 import type { Item, SetReview as SR } from "../../core/review";
 import { record } from "../../data/db";
 import { Back, Screen, useKeys } from "../bits";
@@ -19,6 +20,8 @@ import { SUBJECT, titleOf } from "../copy";
 import { LinkOut } from "../LinkOut";
 import { useTaskTime } from "../focus";
 import { AnswerPick, Dot, KeyLine, LETTERS, TagPick, isTwoPart, showAnswer, tagsFor } from "./parts";
+import { Star } from "../tasks/Grid";
+import { closeRemedies } from "../../core/recall";
 
 export function SetReviewScreen({ id }: { id: string }) {
   const { m } = useApp();
@@ -226,6 +229,15 @@ function Answers({ s, header, onDone }: { s: SR; header: React.ReactNode; onDone
         })}
       </div>
       {!shown.length && <div className="muted" style={{ fontSize: 17 }}>Every one came out right.</div>}
+      {s.all.some((it) => !it.entered && it.firstMark === "right") && (
+        <div className="box" style={{ gap: 6 }}>
+          <div style={{ fontSize: 17 }}>Right ones worth another look? Star them and they come back in a week, then two weeks later.</div>
+          <div className="row wrap" style={{ gap: 4 }}>
+            {s.all.filter((it) => !it.entered && it.firstMark === "right").map((it) => <Star key={it.id} item={it.id} auto={it.look === "slow"} label={it.n !== undefined ? String(it.n) : it.label.replace(/^.*?(passage \d+, question \d+)$/, "$1")} />)}
+          </div>
+          {s.all.some((it) => it.look === "slow") && <div className="tiny">Starred already: right, but slower than the plan's time. Unstar any you'd rather not see.</div>}
+        </div>
+      )}
       <div className="spacer" />
       <EnterButton label="Next" onClick={onDone} />
     </div></Screen>
@@ -286,8 +298,10 @@ function Close({ s, header, done }: { s: SR; header: React.ReactNode; done: () =
   const sum = useMemo(() => closeOf(content!, s, items, linesWritten, d.settings, today, plusDays(weekStartOf(today), 7)), [s, items, linesWritten]); // eslint-disable-line react-hooks/exhaustive-deps
   const hist = m.adapt.history(weekStartOf(today));
   const offers = useMemo(() => topupOffers(s.all, m.reviews, hist), [s.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const rem = useMemo(() => closeRemedies(s, m), [s.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const finish = async (home = true) => {
     if (sum.add && !d.extras.has(sum.add.id)) await record({ type: "extra.added", extra: sum.add });
+    for (const x of rem.add) if (!d.extras.has(x.id)) await record({ type: "extra.added", extra: x });
     if (!d.reviewDone.has(s.id)) await record({ type: "review.done", review: s.id });
     done();
     if (home) go("/");
@@ -307,7 +321,15 @@ function Close({ s, header, done }: { s: SR; header: React.ReactNode; done: () =
       {sum.scheduled && <div style={{ fontSize: 18 }}>{sum.scheduled}</div>}
       {sum.cards && <div style={{ fontSize: 18 }}>{sum.cards}</div>}
       {sum.add && <div className="small">Added to next week: {sum.add.title}.</div>}
+      {rem.lines.map((l) => <div key={l} style={{ fontSize: 17 }}>{l}</div>)}
       {offers.map((o) => <TopupOffer key={o.id} offer={o} />)}
+      {(rem.teach || rem.walk) && (
+        <div className="row wrap" style={{ gap: 8 }}>
+          {rem.teach && <button className="btn small outline" onClick={async () => { await finish(false); go(`/tutor?ctx=${encodeURIComponent(`topic:${rem.teach}`)}`); }}>Learn {topicName(rem.teach).toLowerCase()} again with the tutor</button>}
+          {rem.walk && <button className="btn small outline" onClick={async () => { await finish(false); go(`/tutor?ctx=${encodeURIComponent(`topic:${rem.walk}`)}`); }}>Walk through a {topicName(rem.walk).toLowerCase()} question with the tutor</button>}
+        </div>
+      )}
+      {(rem.teach || rem.walk) && <div className="tiny">A week from now, six new questions on it check that it's stuck.</div>}
       {items.some((it) => it.firstMark === "wrong") && (
         <button className="btn small outline" style={{ alignSelf: "flex-start" }} onClick={async () => { await finish(false); go(`/tutor?ctx=${encodeURIComponent(`review:${s.id}`)}`); }}>Go through these with the tutor</button>
       )}

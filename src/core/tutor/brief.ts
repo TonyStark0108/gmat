@@ -31,6 +31,8 @@ export function studentBrief(m: Model): string {
   L.push(`- ${m.pct}% of the plan done, ${Math.floor(d.totalMinutes / 60)} hours logged, ${d.counted.size} weeks that counted, ${level ? `Level ${level.n} (${level.name})` : "no level yet"}.`);
   if (m.week) L.push(`- This is study week ${weekNumber(m.weekStart, s.startDate)}. Left this week: ${left.length ? left.slice(0, 12).join("; ") : "nothing"}${st && st.reviews.some((r) => r.status !== "done") ? `; ${st.reviews.filter((r) => r.status !== "done").length} set reviews` : ""}.`);
   L.push(`- Cards due now: ${m.cardsDue}. Errors: ${m.reviews.retired} retired, ${m.reviews.inReview} in review, ${m.reviews.stubborn} stubborn ones (missed three times, still coming back).`);
+  if (m.reviews.look) L.push(`- ${m.reviews.look} questions they got right are marked worth another look (starred, or right but slow).`);
+  if (m.adapt.confirmed.size) L.push(`- Topics confirmed by evidence (two 80%+ sets a week apart, no recent concept or process mistakes): ${[...m.adapt.confirmed].map(topicName).join(", ")}. The app gives these no extra practice.`);
   if (m.phase !== "plan") L.push(`- End game: ${m.phase}.`);
 
   L.push("", "## First-try accuracy by section (desk sets)");

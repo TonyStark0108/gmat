@@ -13,7 +13,7 @@ export interface StudyCard {
   id: string;
   front: string;
   back: string;
-  source: "quant facts" | "method" | "error" | "video";
+  source: "quant facts" | "method" | "error" | "video" | "topic";
   topic: string | null;
   section: Section | null;
   createdTs: number;
@@ -53,7 +53,10 @@ export function introduceThisWeek(content: Content, d: Derived, dueNow: number):
   return order.slice(0, NEW_PER_WEEK).map((c) => c.id);
 }
 
-export function buildCards(content: Content, d: Derived): StudyCard[] {
+/** A suggested card you kept (or that was kept for you): see recall.ts. */
+export interface KeptCard { id: string; front: string; back: string; source: "topic" | "error"; topic: string | null; section: Section | null; keptTs: number }
+
+export function buildCards(content: Content, d: Derived, kept: KeptCard[] = []): StudyCard[] {
   const starter = new Map(starterOrder(content).map((c) => [c.id, c]));
   const out: StudyCard[] = [];
   const cap = d.settings.testDate ? parseYmd(d.settings.testDate).getTime() : Infinity;
@@ -81,6 +84,8 @@ export function buildCards(content: Content, d: Derived): StudyCard[] {
     const front = l.front ?? (isVideo ? "After the video" : "Next time");
     make(`line:${l.id}`, front, l.text, isVideo ? "video" : "error", l.topic ?? null, l.section ?? null, l.ts);
   }
+  // the rules-and-traps cards for topics you've worked on, and cards for mistakes you tagged
+  for (const k of kept) make(k.id, k.front, k.back, k.source, k.topic, k.section, k.keptTs);
   return out;
 }
 

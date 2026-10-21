@@ -117,6 +117,19 @@ export function NoteStack() {
   // 8. a rebuild week, when everything in one section felt hard
   const rb = rebuildOffer(a);
   if (rb) return rb;
+
+  // 9. new cards from your work: keep or skip (left alone, they're kept for you the day after next)
+  const fresh = m.sugg.pending.length;
+  if (fresh) {
+    return (
+      <div className="note">
+        <div className="row" style={{ justifyContent: "space-between", gap: 10 }}>
+          <span style={{ fontSize: 18 }}>{fresh === 1 ? "A new card" : `${fresh} new cards`} from your work.</span>
+          <button className="btn small outline" onClick={() => go("/cards/new")}>Look at them</button>
+        </div>
+      </div>
+    );
+  }
   return null;
 }
 

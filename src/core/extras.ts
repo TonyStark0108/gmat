@@ -53,6 +53,14 @@ export function specToPiece(s: ExtraSpec, addedDay: string): ExtraPiece {
     const nums = [...o.numbers].sort((a, b) => a - b);
     t = synthTask(id, s.section, "og_set", s.title, s.minutes, { type: "og_block", book: o.book, qtype: o.qtype as never, list: nums, numbers: [nums[0], nums[nums.length - 1]], count: nums.length });
     t.offline_ok = true;
+  } else if (o.type === "recap") {
+    t = synthTask(id, s.section, "cards", s.title, s.minutes, { type: "cards", recap: o.week });
+  } else if (o.type === "recall") {
+    t = synthTask(id, s.section, "recall", s.title, s.minutes, { type: "recall", sweep: o.sweep });
+    // with quant or DI questions in it, it needs a desk; all reading and CR, it fits a ride
+    t.needs_desk = !o.bus;
+    t.bus_ok = o.bus;
+    t.offline_ok = true;
   } else t = synthTask(id, s.section, "rc_section", s.title, s.minutes, { type: "lsat_rc", section: o.section, count: 0 });
   if (s.kind === "keepsharp" && o.type === "list") t.timed = true;
   return piece(t, { xkind: s.kind, week: s.week, availableFrom: addedDay, hidden: !!s.hidden, spec: s, reason: s.reason });
@@ -130,6 +138,6 @@ export function drillTopic(t: Task): string {
 export function extrasFor(extras: ExtraPiece[], weekStart: string, today: string, d: Derived): ExtraPiece[] {
   return extras.filter((x) => !d.done.has(x.id) && x.availableFrom <= today && x.week !== "" && (x.week <= weekStart || x.xkind === "drill" || x.xkind === "passage")
     // keep-sharp, lean and extra chips belong to their own week only
-    && (!["lean", "extra", "keepsharp"].includes(x.xkind) || x.week === weekStart)
+    && (!["lean", "extra", "keepsharp", "recall", "recap"].includes(x.xkind) || x.week === weekStart)
     && daysBetween(x.availableFrom, today) <= 60);
 }

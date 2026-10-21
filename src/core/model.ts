@@ -23,6 +23,7 @@ import type { CardCtx } from "./card";
 import type { MixChoice } from "./events";
 import { recommendMix, sectionOfMix, type MixRec, type MixSection } from "./mix";
 import { mixedSession } from "./review";
+import { buildSuggestions, offerToday, recallSpecs, type Suggestions } from "./recall";
 
 export interface Model {
   content: Content;
@@ -39,6 +40,7 @@ export interface Model {
   reviews: ReviewModel;
   cards: StudyCard[];
   cardsDue: number;
+  sugg: Suggestions;
   adapt: AdaptView;
   mocks: MockResult[];
   ready: boolean;
@@ -80,7 +82,8 @@ export function buildModel(content: Content, events: AppEvent[], now: Date, onli
   const extras = [...buildExtras(content, plan, d, reviews, today), ...reserve, ...done];
   const byId = new Map<string, Piece>([...plan.map((p) => [p.id, p] as const), ...extras.map((x) => [x.id, x as Piece] as const)]);
   const week = weekPlanOf(d, weekStart, d.settings);
-  const cards = buildCards(content, d);
+  const sugg = buildSuggestions(content, d, reviews, byId, today);
+  const cards = buildCards(content, d, sugg.kept);
   const letGo = new Set([...d.letgo.entries()].filter(([, keep]) => !keep).map(([t]) => t));
   const mocks = mockResults(plan, d);
   const ready = isReady(mocks, s.target ?? 685);
@@ -90,7 +93,7 @@ export function buildModel(content: Content, events: AppEvent[], now: Date, onli
     content, now, today, weekStart, d, plan, extras, byId, week,
     weekExtras: extrasFor(extras, weekStart, today, d),
     weekReviews: weekReviews(reviews, weekStart, d.settings),
-    reviews, cards, cardsDue: dueCards(cards, now.getTime()).length, adapt, mocks, ready,
+    reviews, cards, cardsDue: dueCards(cards, now.getTime()).length, sugg, adapt, mocks, ready,
     // Level 7 is Ready, recomputed from the mocks every time and never stored; levels 1–6 count work done
     level: ready ? 7 : Math.max(Math.min(d.level, 6), levelFromWork(plan, d.done, errorsHalf)),
     workLevel: Math.max(Math.min(d.level, 6), levelFromWork(plan, d.done, errorsHalf)),
@@ -134,6 +137,17 @@ export function upkeep(m: Model): EventBody[] {
   // the week's extra chip (hidden until the required chips are done) and the lean toward the weakest section
   if (today >= s.startDate && d.weeks.has(ws)) {
     for (const x of weekExtrasFor(m)) if (!d.extras.has(x.id)) out.push({ type: "extra.added", extra: x });
+  }
+
+  // the day's new cards: a few of the waiting suggestions, once a day
+  if (today >= s.startDate) {
+    const ids = offerToday(m.sugg, d, today, m.cardsDue);
+    if (ids) out.push({ type: "cards.offered", day: today, ids });
+  }
+
+  // bringing things back: your error log from memory, the sweep before a mock, the week's recap, fresh-question checks
+  if (today >= s.startDate && d.weeks.has(ws)) {
+    for (const x of recallSpecs(m)) if (!d.extras.has(x.id)) out.push({ type: "extra.added", extra: x });
   }
 
   // weeks that now count

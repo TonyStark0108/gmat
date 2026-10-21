@@ -19,6 +19,7 @@ import { Screen, openOut, useKeys, useToast } from "./bits";
 import { SUBJECT, metaOf, pointerOf, titleOf, whereOf } from "./copy";
 import { useFocus } from "./focus";
 import { NoteStack } from "./Notes";
+import { WARMUP_MIN } from "./Cards";
 
 const MBA_URL = "https://www.mba.com/";   // link catalogue L153
 
@@ -39,11 +40,14 @@ export function Home() {
   const lv = levelView(m.level, m.plan, d.done);
   const inRow = weeksInARow(d.counted, week?.weekStart ?? today);
 
-  async function start(p: Piece) {
+  async function start(p: Piece, warmup = false) {
     if (!d.mixByDay.has(today) && !bus) await record({ type: "mix", choice: chosen });
     if (!d.started.has(p.id)) await record({ type: "piece.started", piece: p.id, mode: bus ? "bus" : "desk" });
     if (!bus) focus.startSitting();
-    go(`/task/${encodeURIComponent(p.id)}`);
+    const path = `/task/${encodeURIComponent(p.id)}`;
+    // the first piece of the day at a desk starts with a few due cards (skip it any time)
+    if (warmup && !bus && !d.seen.has(`warmup:${today}`) && m.cardsDue >= WARMUP_MIN) go(`/cards?warm=1&then=${encodeURIComponent(path)}`);
+    else go(path);
   }
   async function startMixed(items: { id: string }[]) {
     const id = `mixed:${Date.now().toString(36)}`;
@@ -58,7 +62,8 @@ export function Home() {
 
   const primary = (): (() => void) | null => {
     switch (card.kind) {
-      case "task": case "resume": case "mock": case "redo": return () => void start(card.piece);
+      case "task": return () => void start(card.piece, card.piece.task.kind !== "cards" && card.piece.task.kind !== "recall");
+      case "resume": case "mock": case "redo": return () => void start(card.piece);
       case "review": return () => go(`/review/${encodeURIComponent(card.set.id)}`);
       case "resumeReview": return () => go(`/review/${encodeURIComponent(card.review)}`);
       case "mixed": return () => void startMixed(card.items);

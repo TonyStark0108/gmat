@@ -12,6 +12,7 @@ import {
   weakestSection, type AdaptSection, type TopicStat, type TopupOffer,
 } from "./adapt";
 import { listTopic, topicName } from "./topics";
+import { confirmedTopics } from "./mastery";
 import { weekNumber } from "./sunday";
 import type { WeekPlan } from "./week";
 
@@ -19,6 +20,7 @@ export interface WorkOnGroup { heading: string; detail: string; count: number; t
 
 export interface AdaptView {
   stats: Map<string, TopicStat>;
+  confirmed: Set<string>;         // topics with confirmed evidence: extra practice leaves them be
   sections: ReturnType<typeof sectionStats>;
   weakest: AdaptSection | null;
   weight: (topic: string | null) => number;
@@ -38,6 +40,8 @@ const SEC_NAME: Record<string, string> = { quant: "quant", di: "DI", rc: "readin
 
 export function buildAdapt(content: Content, reviews: ReviewModel, d: Derived, byId: Map<string, Piece>, mocks: MockResult[], today: string): AdaptView {
   const stats = topicStats(reviews, d, byId, today);
+  const confirmed = confirmedTopics(stats, reviews, today);
+  const open = new Map([...stats].filter(([k]) => !confirmed.has(k)));
   const sections = sectionStats(reviews, d);
   const lastMock = [...mocks].reverse().find((m) => m.official && m.quant !== null && m.verbal !== null && m.di !== null);
   const mockSec: Partial<Record<AdaptSection, number>> | undefined = lastMock
@@ -60,7 +64,7 @@ export function buildAdapt(content: Content, reviews: ReviewModel, d: Derived, b
   };
 
   const weakTopicIn = (sec: Section): string | null => {
-    const c = [...stats.values()].filter((s) => s.section === sec && s.topic !== "mixed" && s.attempts >= 5).sort((a, b) => a.accuracy - b.accuracy);
+    const c = [...open.values()].filter((s) => s.section === sec && s.topic !== "mixed" && s.attempts >= 5).sort((a, b) => a.accuracy - b.accuracy);
     return c[0]?.topic ?? null;
   };
 
@@ -82,11 +86,11 @@ export function buildAdapt(content: Content, reviews: ReviewModel, d: Derived, b
   const usedRc = new Set([...content.plan.tasks.filter((t) => t.kind === "rc_section").map((t) => t.pointer.section), ...[...d.extras.values()].filter((x) => x.open.type === "rc").map((x) => (x.open as { section: string }).section)]);
 
   const view: AdaptView = {
-    stats, sections, weakest, weight,
+    stats, confirmed, sections, weakest, weight,
     timingEarly: (s) => leadingTag(stats, [s]) === "timing",
     carelessLeads: leadingTag(stats, ["quant", "di"]) === "careless",
     extraChip: (ws) => {
-      const topic = extraTopic(stats) ?? weekTopic(ws) ?? "arithmetic";
+      const topic = extraTopic(open) ?? weekTopic(ws) ?? "arithmetic";
       const sec: Section = stats.get(topic)?.section === "di" || topic.startsWith("ds · ") ? "di" : "quant";
       const spec = listSpec(`extra:${ws}`, "extra", ws, topic, sec, `Extra · ${topicName(topic).toLowerCase()} · 10 questions`, 25, 10);
       return spec ? { ...spec, hidden: true } : null;

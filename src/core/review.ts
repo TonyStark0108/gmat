@@ -4,6 +4,10 @@
 // ones, right-or-wrong dots, a last try, the answers, then tags. Each question then follows the redo
 // ladder: Redo → Return (14–21 days later) → Retired (right twice, a week or more apart), or Moved on
 // after three misses. Everything here is computed from the event log; nothing is stored twice.
+//
+// Worth another look: a question you got right that you starred (or that took well over the plan's
+// time) comes back about a week later, then about two weeks after that, mixed in with the returns.
+// Right both times and it's off the list; wrong, and it becomes a mistake like any other.
 
 import { dayCapacity, daysBetween, plusDays, weekStartOf } from "./calendar";
 import { logTopic, qtypeSection, SOURCE_NAMES } from "./qlog";
@@ -12,10 +16,10 @@ import { pagesFor, type BookId, type Content, type Section, type Task } from "./
 import type { Answer, Tag } from "./events";
 import { markOne } from "./grid";
 import { groupOf, type Group, type Piece } from "./pieces";
-import type { Derived } from "./state";
+import type { Derived, ReviewAttempt } from "./state";
 import { bookTopic } from "./topics";
 
-export type ItemState = "fine" | "review" | "redo" | "return" | "retired" | "stubborn" | "done";
+export type ItemState = "fine" | "review" | "redo" | "return" | "retired" | "stubborn" | "done" | "look" | "looked";
 export type ItemSource = "book" | "rc" | "cr" | "share" | "log";
 
 export interface Item {
@@ -54,6 +58,7 @@ export interface Item {
   tag?: Tag;
   line?: string;
   attempts: number;               // goes in reviews, not counting the last try
+  look?: "starred" | "slow";      // worth another look: you starred it, or it was right but slow
 }
 
 export type SetStatus = "none" | "waiting" | "open" | "started" | "done" | "lapsed";
@@ -82,6 +87,7 @@ export interface ReviewModel {
   retired: number;
   inReview: number;
   stubborn: number;
+  look: number;                   // right ones waiting for another look
   errorsSoFar: number;
   openMixed: { id: string; items: Item[] } | null;
 }
@@ -93,6 +99,17 @@ export const LAPSE_AFTER = 14;
 export const STUBBORN_AT = 3;     // three misses: the question joins the stubborn queue (it never leaves)
 export const STUBBORN_GAP = 10;   // and comes back ten days later, in its own session
 export const MIXED_SIZE = 8;
+export const LOOK_FIRST = 7;      // a starred or slow one comes back a week later,
+export const LOOK_AGAIN = 14;     // then two weeks after a clean go; two clean goes and it's off the list
+export const LOOK_SLIP_GAP = 3;   // a retired one you starred and missed comes back three days later
+
+/** Right and sure, but slow: over the plan's flag time (2:30 for quant and DS, 3:00 for other DI). */
+export function slowRight(it: Pick<Item, "firstMark" | "firstUnsure" | "firstMs" | "section" | "topic">): boolean {
+  if (it.firstMark !== "right" || it.firstUnsure || it.firstMs === null) return false;
+  if (it.section !== "quant" && it.section !== "di") return false;
+  const limit = it.section === "di" && !it.topic.startsWith("ds · ") ? 180_000 : 150_000;
+  return it.firstMs > limit && it.firstMs < 20 * 60_000;
+}
 
 const SET_KINDS = new Set(["og_set", "rc_section", "cr_set", "di_set"]);
 
@@ -225,16 +242,49 @@ function setItems(inp: ReviewInput, task: Task, ps: Piece[], setDay: string): It
   return out;
 }
 
+const rightOf = (it: Item, a: ReviewAttempt) => a.right ?? (it.key !== undefined && it.key !== null && markOne(a.value, it.key as string | number[]) === "right");
+
+/** Worth another look: two clean goes, spaced, and it's off the list. Returns the attempts left over if it turned into a mistake. */
+function lookWalk(it: Item, atts: ReviewAttempt[], from: string, becomesError: boolean): ReviewAttempt[] | null {
+  it.state = "look";
+  it.dueFrom = plusDays(from, LOOK_FIRST);
+  let clean = 0;
+  for (let i = 0; i < atts.length; i++) {
+    const a = atts[i];
+    if (a.day < from) continue;
+    it.attempts++;
+    it.lastDay = a.day;
+    if (rightOf(it, a)) {
+      if (++clean >= 2) { it.state = "looked"; return null; }
+      it.dueFrom = plusDays(a.day, LOOK_AGAIN);
+    } else if (becomesError) {
+      // wrong this time: from here on it's a mistake like any other (the review asks why)
+      it.entered = true; it.needsTag = true; it.misses = 1; it.state = "redo"; it.dueFrom = plusDays(a.day, REDO_MIN_GAP);
+      return atts.slice(i + 1);
+    } else { clean = 0; it.dueFrom = plusDays(a.day, LOOK_SLIP_GAP); }
+  }
+  return null;
+}
+
 /** Walk an item's attempts through the redo ladder. */
 function ladder(it: Item, d: Derived, setReview: { status: SetStatus; doneDay: string | null; windowFrom: string } | null) {
-  if (!it.entered) return;
+  // reading questions follow the same ladder as everything else (redone one by one, in the reader);
+  // goes inside "your error log, from memory" are practice and never move the ladder
+  const all = (d.attempts.get(it.id) ?? []).filter((a) => a.attempt !== "last" && a.attempt !== "recall");
+  const look = d.looks.get(it.id);
+  let atts = all;
+  if (!it.entered) {
+    if (!(look ? look.on : slowRight(it))) return;
+    it.look = look?.on ? "starred" : "slow";
+    const rest = lookWalk(it, all, look?.on && look.day > it.setDay ? look.day : it.setDay, true);
+    if (!rest) return;
+    atts = rest;
+  }
   const tag = d.tags.get(it.id);
   if (tag) { it.tag = tag.tag; it.line = tag.line; }
-  if (setReview) it.dueFrom = setReview.windowFrom;
-  // reading questions follow the same ladder as everything else (redone one by one, in the reader)
-  const atts = (d.attempts.get(it.id) ?? []).filter((a) => a.attempt !== "last");
+  if (setReview && it.state === "review") it.dueFrom = setReview.windowFrom;
   for (const a of atts) {
-    const right = a.right ?? (it.key !== undefined && markOne(a.value, it.key as string | number[]) === "right");
+    const right = rightOf(it, a);
     it.attempts++;
     it.lastDay = a.day;
     const miss = () => {
@@ -250,6 +300,11 @@ function ladder(it: Item, d: Derived, setReview: { status: SetStatus; doneDay: s
       else if (!right) miss();
     }
     if (it.state === "retired") break;
+  }
+  // a retired one you star again: it comes back for another look (it stays counted as retired)
+  if (it.state === "retired" && look?.on && it.retiredDay && look.day >= it.retiredDay) {
+    it.look = "starred";
+    lookWalk(it, all, look.day, false);
   }
   if (it.state === "review" && setReview) {
     // the review finished without a blind retry for this one (the no-key path), or never happened
@@ -339,12 +394,13 @@ export function buildReviews(inp: ReviewInput): ReviewModel {
     items.set(id, it);
   }
 
-  let retired = 0, inReview = 0, stubborn = 0, errorsSoFar = 0;
+  let retired = 0, inReview = 0, stubborn = 0, errorsSoFar = 0, look = 0;
   for (const it of items.values()) {
+    if (it.state === "look") look++;
     // a question whose answer isn't known yet (a CR set before its review) isn't an error yet
     if (!it.entered || it.firstMark === "unknown") continue;
     errorsSoFar++;
-    if (it.state === "retired") retired++;
+    if (it.retiredDay) retired++;
     else if (it.state === "stubborn") stubborn++;
     else if (it.state === "review" || it.state === "redo" || it.state === "return") inReview++;
   }
@@ -357,12 +413,12 @@ export function buildReviews(inp: ReviewInput): ReviewModel {
     if (its.length) openMixed = { id, items: its };
   }
 
-  return { sets, setById: new Map(sets.map((s) => [s.id, s])), items, retired, inReview, stubborn, errorsSoFar, openMixed };
+  return { sets, setById: new Map(sets.map((s) => [s.id, s])), items, retired, inReview, stubborn, look, errorsSoFar, openMixed };
 }
 
 /** Is a redo or return free to come up today? (After a late night, today's newly due ones wait a day.) */
 export function dueToday(it: Item, d: Derived, today: string): boolean {
-  if (!it.dueFrom || (it.state !== "redo" && it.state !== "return" && it.state !== "stubborn")) return false;
+  if (!it.dueFrom || (it.state !== "redo" && it.state !== "return" && it.state !== "stubborn" && it.state !== "look")) return false;
   if (it.dueFrom > today) return false;
   if (it.dueFrom === today && d.lateSessions.has(plusDays(today, -1))) return false;
   return true;

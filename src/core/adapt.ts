@@ -196,8 +196,9 @@ export function topupOffers(setItems: Item[], reviews: ReviewModel, hist: Return
     const wrong = its.filter((it) => it.firstMark === "wrong").length;
     const rough = its.length >= 3 && wrong / its.length > 0.4;
     const live = [...reviews.items.values()].filter((it) => it.topic === topic && (it.state === "redo" || it.state === "return" || it.state === "review" || it.state === "stubborn")).length;
-    if (!rough && live < 4) continue;
     const tags = its.map((it) => it.tag).filter(Boolean) as Tag[];
+    // two or more concept mistakes on one topic: re-teach it, even if the set went fine overall
+    if (!rough && live < 4 && tags.filter((t) => t === "concept").length < 2) continue;
     const slips = tags.filter(isSlip).length;
     if (tags.length && slips >= tags.length - slips) continue;       // mostly careless: the slips video helps more
     const concept = tags.filter((t) => t === "concept").length, process = tags.filter((t) => t === "process").length;

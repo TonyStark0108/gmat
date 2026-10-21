@@ -7,6 +7,8 @@ import { DayOne, LoadContent, Setup, dayOnePassed } from "./ui/FirstRun";
 import { Home } from "./ui/Home";
 import { Life } from "./ui/Life";
 import { MapScreen } from "./ui/Map";
+import { CoverageScreen } from "./ui/Coverage";
+import { NewCards } from "./ui/NewCards";
 import { ErrorsScreen, ProgressScreen } from "./ui/Progress";
 import { MixedReviewScreen } from "./ui/review/MixedReview";
 import { SetReviewScreen } from "./ui/review/SetReview";
@@ -43,7 +45,9 @@ export function App() {
     const id = decodeURIComponent(path.slice(8));
     return id.startsWith("mixed:") ? <MixedReviewScreen key={id} id={id} /> : <SetReviewScreen key={id} id={id} />;
   }
-  if (path === "/cards") return <CardSession key={params.toString()} topic={params.get("topic") ?? undefined} />;
+  if (path === "/cards") return <CardSession key={params.toString()} topic={params.get("topic") ?? undefined} warm={params.get("warm") === "1"} then={params.get("then") ?? undefined} />;
+  if (path === "/cards/new") return <NewCards />;
+  if (path === "/coverage") return <CoverageScreen />;
   if (path === "/cards/manage") return <ManageCards />;
   if (path === "/week") return <Week />;
   if (path === "/progress") return <ProgressScreen />;
