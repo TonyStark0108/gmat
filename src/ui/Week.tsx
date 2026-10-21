@@ -48,7 +48,10 @@ export function nextWeekShape(m: Model, ws = m.weekStart): string | null {
   if (nextPieces.some((p) => p.task.kind === "mock" && p.task.pointer.type === "official_mock")) bits.push(m.mocks.length ? "a mock lands" : "first mock lands");
   if (nw.pause) return "Next week is a pause week.";
   if (!nextPieces.length) return "Next week: the end of the plan.";
-  return `Next week's shape: ${bits.length ? bits.join(", ") : `plan week ${nextPieces[nextPieces.length - 1].planWeek} work`}.`;
+  if (bits.length) return `Next week's shape: ${bits.join(", ")}.`;
+  const nowWeek = Math.max(0, ...chips.map((p) => p.planWeek));
+  const nextWeek = nextPieces[nextPieces.length - 1].planWeek;
+  return nextWeek === nowWeek ? `Next week: more of plan week ${nextWeek}.` : `Next week: plan week ${nextWeek}.`;
 }
 
 export function Week() {

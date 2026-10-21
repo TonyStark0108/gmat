@@ -74,7 +74,7 @@ export function Life() {
         <button className="btn outline" onClick={() => void go1("tonight")}>{ahead ? "That evening" : "Tonight"}</button>
         <button className="btn outline" onClick={() => void go1("weekend")}>{ahead ? "That weekend" : "This weekend"}</button>
         <button className="btn outline" onClick={() => void go1("week")}>{ahead ? "That whole week" : "A whole week"}</button>
-        <div className="tiny" style={{ lineHeight: 1.5 }}>A whole week becomes a light bus week: 4–5 hours of reading, videos and cards. It still counts as a week done.</div>
+        <div className="tiny" style={{ lineHeight: 1.5 }}>A whole week becomes a light bus week: 4–5 hours of reading, videos and cards. It counts as a week done.</div>
       </div>
     </Screen>
   );

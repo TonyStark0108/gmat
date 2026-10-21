@@ -95,8 +95,8 @@ export function buildModel(content: Content, events: AppEvent[], now: Date, onli
     weekReviews: weekReviews(reviews, weekStart, d.settings),
     reviews, cards, cardsDue: dueCards(cards, now.getTime()).length, sugg, adapt, mocks, ready,
     // Level 7 is Ready, recomputed from the mocks every time and never stored; levels 1–6 count work done
-    level: ready ? 7 : Math.max(Math.min(d.level, 6), levelFromWork(plan, d.done, errorsHalf)),
-    workLevel: Math.max(Math.min(d.level, 6), levelFromWork(plan, d.done, errorsHalf)),
+    level: ready ? 7 : Math.max(Math.min(d.level, 6), levelFromWork(plan, d.done, errorsHalf, letGo)),
+    workLevel: Math.max(Math.min(d.level, 6), levelFromWork(plan, d.done, errorsHalf, letGo)),
     pct: percentDone(plan, d.done, letGo), letGo, phase: endPhase(d.settings.testDate, today),
     ride: rideMinutes(d, now.getTime()), bus: busOn(d, now.getTime()), busChip: !busOn(d, now.getTime()) && busChip(d, now),
     back: gapDays(d, today) >= WARM_WELCOME_AFTER && !d.seen.has(`back:${today}`) && d.setupDone && today > d.settings.startDate,
@@ -154,9 +154,10 @@ export function upkeep(m: Model): EventBody[] {
   for (const [w] of d.weeks) {
     if (d.counted.has(w)) continue;
     const st = weekStatus(m, w);
-    if (st.plan && weekCounts(st.plan, d, today, st.reviewsDone)) out.push({ type: "week.counted", week: w });
+    if (st.plan && weekCounts(st.plan, d, today, st.reviewsDone, (id) => m.letGo.has(m.byId.get(id)?.taskId ?? ""))) out.push({ type: "week.counted", week: w });
   }
   if (m.workLevel > d.level) out.push({ type: "level", level: m.workLevel });
+  for (const it of m.reviews.items.values()) if (it.retiredDay && !d.retiredItems.has(it.id)) out.push({ type: "retired", item: it.id });
   if (s.agreedFinish === null && d.setupDone && plan.length) {
     const from = today > s.startDate ? today : s.startDate;
     const p = projectFinish({ pieces: plan, done: d.done, settings: s, fromWeek: weekStartOf(from), fromDay: from, busMinutes: m.ride });
@@ -184,7 +185,13 @@ export function weekExtrasFor(m: Model): ExtraSpec[] {
   const out: ExtraSpec[] = [];
   const ws = m.weekStart;
   const allDone = m.plan.every((p) => m.d.done.has(p.id) || m.letGo.has(p.taskId));
-  if (m.phase === "taper" || m.phase === "testweek") return out;
+  if (m.phase === "testweek") return out;
+  if (m.phase === "taper") {
+    const mockLeft = m.plan.some((p) => p.task.kind === "mock" && p.task.pointer.type === "official_mock" && !m.d.done.has(p.id) && !m.letGo.has(p.taskId));
+    const t = mockLeft ? null : m.adapt.keepSharp(ws, true);
+    if (t) out.push({ ...t, id: `taper:${ws}`, title: "A timed quant section, the last before the test" });
+    return out;
+  }
   const extra = m.adapt.extraChip(ws);
   if (extra) out.push(extra);
   if (adaptOn(m)) {

@@ -51,14 +51,15 @@ export function recentGaps(reviews: ReviewModel, topic: string, today: string): 
 }
 
 export function standingOf(stat: TopicStat | undefined, met: boolean, gaps: number): Standing {
-  if (!stat || stat.attempts === 0) return met ? "started" : "later";
-  if (stat.attempts < SET_MIN) return met ? "started" : "later";     // a stray question or two before the plan gets there
+  if (!met) return "later";                                          // the plan hasn't reached it (stray questions don't count)
+  if (!stat || stat.attempts === 0) return "started";
+  if (stat.attempts < SET_MIN) return "started";
   const good = stat.sets.filter((s) => s.n >= SET_MIN && s.accuracy >= GOOD_SET);
   const scored = stat.sets.filter((s) => s.n >= SET_MIN);
   const latest = scored[scored.length - 1];
   const spread = good.length >= 2 && daysBetween(good[0].day, good[good.length - 1].day) >= CONFIRM_GAP;
   if (stat.attempts >= CONFIRM_MIN && spread && latest && latest.accuracy >= GOOD_SET && gaps === 0) return "confirmed";
-  if (good.length) return "consistent";
+  if (good.length && latest && latest.accuracy >= GOOD_SET) return "consistent";
   return "building";
 }
 

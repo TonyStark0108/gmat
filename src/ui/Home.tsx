@@ -5,10 +5,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { go } from "../app/router";
 import { useApp } from "../app/store";
 import { alternativeFor, chooseCard, type Card } from "../core/card";
-import { longDate } from "../core/calendar";
+import { longDate, slotAt } from "../core/calendar";
 import type { MixChoice } from "../core/events";
 import { inWords } from "../core/grid";
-import { restTaken } from "../core/weekly";
+import { restTaken, weekPlanOf } from "../core/weekly";
 import { moveMockDay } from "../core/mocks";
 import { MIX_NAMES } from "../core/mix";
 import { cardContext } from "../core/model";
@@ -38,7 +38,7 @@ export function Home() {
   const card = chooseCard(ctx);
 
   const lv = levelView(m.level, m.plan, d.done);
-  const inRow = weeksInARow(d.counted, week?.weekStart ?? today);
+  const inRow = weeksInARow(d.counted, week?.weekStart ?? today, (w) => !!weekPlanOf(d, w, d.settings)?.pause);
 
   async function start(p: Piece, warmup = false) {
     if (!d.mixByDay.has(today) && !bus) await record({ type: "mix", choice: chosen });
@@ -74,7 +74,7 @@ export function Home() {
   useKeys({
     Enter: () => { if (skipFor) return; primary()?.(); },
     s: () => {
-      if (card.kind === "task") void skip(card.piece.id, card.piece);
+      if (card.kind === "task" || card.kind === "resume") void skip(card.piece.id, card.piece);
       else if (card.kind === "review") void skip(card.set.id, null);
       else if (card.kind === "mixed") void skip("mixed", null);
     },
@@ -91,7 +91,7 @@ export function Home() {
   }, [m.reviews.retired]);
 
   return (
-    <Screen right={card.kind === "task" || card.kind === "resume" ? `plan week ${card.piece.planWeek || ""}`.trim() : ""}>
+    <Screen right={(card.kind === "task" || card.kind === "resume") && card.piece.planWeek ? `plan week ${card.piece.planWeek}` : ""}>
       <div className="column">
         <button onClick={() => go("/progress")} style={{ all: "unset", cursor: "pointer", display: "flex", flexDirection: "column", gap: 6 }} title="The journey">
           <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
@@ -116,12 +116,12 @@ export function Home() {
 
         <NoteStack />
 
-        {!bus && card.kind === "task" && (
+        {!bus && card.kind === "task" && slotAt(a.now, d.settings)?.kind !== "morning" && (
           <MixSwitch chosen={chosen} rec={rec.choice} reason={d.mixByDay.has(today) ? null : rec.reason} />
         )}
 
         <CardView card={card} onPrimary={primary()} onSkip={
-          card.kind === "task" ? () => void skip(card.piece.id, card.piece)
+          card.kind === "task" || card.kind === "resume" ? () => void skip(card.piece.id, card.piece)
             : card.kind === "review" ? () => void skip(card.set.id, null)
               : card.kind === "mixed" ? () => void skip("mixed", null) : undefined} />
 
@@ -158,7 +158,7 @@ export function Home() {
           <div className="spacer" />
           <button className="back" onClick={() => go("/life")}>Something came up</button>
         </div>
-        <nav className="row" style={{ justifyContent: "space-between", borderTop: "1.5px solid var(--line)", paddingTop: 4 }}>
+        <nav className="homenav" style={{ borderTop: "1.5px solid var(--line)", paddingTop: 4 }}>
           <NavLink to="/week" label="This week" />
           <NavLink to="/map" label="Map" />
           <NavLink to="/progress" label="Progress" />
@@ -266,7 +266,7 @@ function CardView({ card, onPrimary, onSkip }: { card: Card; onPrimary: (() => v
       const p = m.plan.find((x) => x.taskId === s.taskId)!;
       v = { col: k.c, t: k.t, dk: k.d, eb: `${k.name} · review`, title: `The review: ${titleOf(p).replace(/, (first|second) half$/, "")}`,
         ptr: s.path === "full" ? `${inWords(s.items.length)} to look at again, from scratch` : "The not-sure ones, then the official answers",
-        meta: `about ${s.minutes} minutes`, where: s.task.kind === "rc_section" ? "reads here" : s.task.kind === "cr_set" ? "opens GMAT Club" : "here, with the book",
+        meta: `about ${s.minutes} minutes`, where: s.task.kind === "rc_section" ? "reads here" : s.task.kind === "cr_set" ? "opens GMAT Club" : "with the book",
         start: "Start", skip: "Skip", border: `4px double ${k.c}` };
       break;
     }
@@ -286,7 +286,7 @@ function CardView({ card, onPrimary, onSkip }: { card: Card; onPrimary: (() => v
       v = { col: k.c, t: k.t, dk: k.d, eb: card.stubborn ? "The stubborn ones" : "Review",
         title: card.stubborn ? `${inWords(n)} stubborn ${n === 1 ? "one" : "ones"}, a fresh look.` : `${inWords(n)} ${n === 1 ? "question" : "questions"}, mixed.`,
         ptr: card.stubborn ? "Missed three times: they come back every ten days until they're right twice." : card.returning ? `${inWords(card.returning)} you haven't seen in a while.` : undefined, meta: `about ${Math.max(5, n * 3)} minutes`,
-        where: card.items.some((it) => it.source === "book") ? "here, with the book" : "opens GMAT Club", start: "Start", skip: "Skip", border: `4px double ${k.c}` };
+        where: card.items.some((it) => it.source === "book") ? "with the book" : "opens GMAT Club", start: "Start", skip: "Skip", border: `4px double ${k.c}` };
       break;
     }
     default: {
@@ -296,7 +296,7 @@ function CardView({ card, onPrimary, onSkip }: { card: Card; onPrimary: (() => v
       v = { col: k.c, t: k.t, dk: k.d, eb: card.kind === "task" && card.ahead ? "This week's done · next week, early" : card.kind === "resume" ? "Waiting where you left it" : isMock ? "Today · mock" : card.kind === "redo" ? `${k.name} · again` : k.name,
         title: titleOf(p), ptr: pointerOf(p, a.content) || undefined, meta: isMock ? "about 2 h 15 min" : metaOf(p), where: whereOf(p),
         start: card.kind === "resume" ? "Carry on" : isMock ? "Open" : "Start",
-        skip: card.kind === "task" ? "Skip" : undefined, time: card.kind === "task" };
+        skip: card.kind === "task" ? "Skip" : card.kind === "resume" ? "Not now" : undefined, time: card.kind === "task" };
       if (isMock) v.second = { label: "Move it", run: () => void record({ type: "mock.moved", piece: p.id, day: moveMockDay(today, m.mocks[m.mocks.length - 1]?.day ?? null) }) };
       if (card.kind === "resume") v.prog = { w: card.progress.total ? card.progress.done / card.progress.total : 0, t: `${card.progress.done} of ${card.progress.total}` };
       if (card.kind === "task" && card.next) v.next = `Next: ${titleOf(card.next).replace(/^An? /, "")}.`;

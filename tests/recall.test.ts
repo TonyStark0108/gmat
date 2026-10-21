@@ -216,7 +216,7 @@ describe("where each topic stands", () => {
     expect(standingOf(stat([["2026-12-05", 0.9, 10], ["2026-12-09", 0.9, 10]]), true, 0)).toBe("consistent");    // four days apart
     expect(standingOf(stat([["2026-12-05", 0.9, 10], ["2026-12-12", 0.8, 10]]), true, 0)).toBe("confirmed");
     expect(standingOf(stat([["2026-12-05", 0.9, 10], ["2026-12-12", 0.8, 10]]), true, 1)).toBe("consistent");    // a recent concept mistake
-    expect(standingOf(stat([["2026-12-05", 0.9, 10], ["2026-12-12", 0.8, 10], ["2026-12-19", 0.5, 10]]), true, 0)).toBe("consistent");  // the latest dipped
+    expect(standingOf(stat([["2026-12-05", 0.9, 10], ["2026-12-12", 0.8, 10], ["2026-12-19", 0.5, 10]]), true, 0)).toBe("building");    // the latest dipped
   });
 });
 

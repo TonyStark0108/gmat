@@ -77,7 +77,7 @@ export function carelessLine(content: Content, task: Task, items: Item[], slips:
   if (!rule?.careless_max_share || task.section === "rc" || task.section === "cr") return null;
   const n = items.length;
   const bar = Math.max(1, Math.round(rule.careless_max_share * n));
-  return `${slips ? inWords(slips) : "No"} ${slips === 1 ? "slip" : "slips"} in ${n}. This week's bar is ${inWords(bar).toLowerCase()}.`;
+  return `${slips ? inWords(slips) : "No"} ${slips === 1 ? "slip" : "slips"} in ${n}. This week's aim: ${inWords(bar).toLowerCase()} or fewer.`;
 }
 
 export interface CloseSummary {

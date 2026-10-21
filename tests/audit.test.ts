@@ -58,12 +58,15 @@ describe("A · target and readiness", () => {
 describe("B · official mocks and question supply", () => {
   const timed = (week: number): Task => task({ id: `w${week}-mock`, section: "mock", kind: "mock", plan_week: week, pointer: { type: "timed_sections" } });
   const practice = { ...task({ id: "w01-mock-01", section: "mock", kind: "mock", plan_week: 1, pointer: { type: "official_mock", exam: 1, practice_run: true } }), optional: "setting" as const, setting: "practice_run_week1" };
-  const CM = fixtureContent([timed(9), timed(10), timed(11), timed(12), timed(13), practice]);
+  // as in the real plan: timed stand-ins in weeks 9, 10, 12 and 13, and Exam 2 (free) in week 11
+  const exam2 = task({ id: "w11-mock-02", section: "mock", kind: "mock", plan_week: 11, pointer: { type: "official_mock", exam: 2 } });
+  const CM = fixtureContent([timed(9), timed(10), exam2, timed(12), timed(13), practice]);
 
-  it("B5: Exams 3–6 take weeks 9, 10, 12 and 13; the stand-ins come back only if they're not bought", () => {
+  it("B5: with Exams 3–6 bought, weeks 9–13 take Exams 2–6 in the plan's order; not bought, the stand-ins come back and Exam 2 stays in week 11", () => {
     const exams = planTasks(CM, settings()).filter((t) => t.kind === "mock").map((t) => [t.plan_week, t.pointer.type, t.pointer.exam]);
-    expect(exams).toEqual([[9, "official_mock", 3], [10, "official_mock", 4], [11, "timed_sections", undefined], [12, "official_mock", 5], [13, "official_mock", 6]]);
-    expect(planTasks(CM, settings({ exams36: "not bought" })).filter((t) => t.pointer.type === "official_mock")).toHaveLength(0);
+    expect(exams).toEqual([[9, "official_mock", 2], [10, "official_mock", 3], [11, "official_mock", 4], [12, "official_mock", 5], [13, "official_mock", 6]]);
+    const free = planTasks(CM, settings({ exams36: "not bought" })).filter((t) => t.pointer.type === "official_mock");
+    expect(free.map((t) => [t.plan_week, t.pointer.exam])).toEqual([[11, 2]]);
   });
 
   it("C14: the practice run is a non-official test unless you choose Exam 1", () => {

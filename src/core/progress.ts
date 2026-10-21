@@ -17,13 +17,16 @@ export function hoursLogged(d: Derived): number {
   return Math.floor(d.totalMinutes / 60);
 }
 
-export function weeksInARow(counted: Set<string>, currentWeek: string): number {
-  // count back from the current week if it has counted, otherwise from the week before
-  let w = counted.has(currentWeek) ? currentWeek : ymd(addDays(parseYmd(currentWeek), -7));
+export function weeksInARow(counted: Set<string>, currentWeek: string, isPause: (weekStart: string) => boolean = () => false): number {
+  // count back from the current week if it has counted, otherwise from the week before; a pause week
+  // neither counts nor breaks the run
+  const back = (w: string) => ymd(addDays(parseYmd(w), -7));
+  let w = counted.has(currentWeek) ? currentWeek : back(currentWeek);
   let n = 0;
-  while (counted.has(w)) {
-    n++;
-    w = ymd(addDays(parseYmd(w), -7));
+  for (let guard = 0; guard < 200; guard++) {
+    if (counted.has(w)) n++;
+    else if (!isPause(w)) break;
+    w = back(w);
   }
   return n;
 }
@@ -39,8 +42,10 @@ export const LEVELS = [
 ] as const;
 
 /** The highest level the work so far unlocks (levels 1–6 count plan weeks done). */
-export function levelFromWork(pieces: Piece[], done: Set<string>, errorsHalfRetired = true): number {
+export function levelFromWork(pieces: Piece[], done: Set<string>, errorsHalfRetired = true, letGo: Set<string> = new Set()): number {
   let level = 0;
+  // tasks you let go count as done here, the same way they leave the %
+  if (letGo.size) { done = new Set(done); for (const p of pieces) if (letGo.has(p.taskId)) done.add(p.id); }
   for (const L of LEVELS) {
     if (!L.weeks) break;
     const [a, b] = L.weeks;

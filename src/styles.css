@@ -155,6 +155,17 @@ a { color: var(--link); }
 .update-chip { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 70; display: flex; gap: 14px; align-items: center; background: var(--card); border: 2px solid var(--ink); border-radius: 16px; padding: 8px 8px 8px 16px; font-size: 17px; width: max-content; max-width: calc(100vw - 32px); animation: rise .25s ease both; }
 .update-chip .btn.small { height: 40px; padding: 0 18px; }
 
+/* a question's row fits a phone on one line: number, five letters, the star, sure / not sure */
+@media (max-width: 420px) {
+  .grid-row { gap: 4px !important; }
+  .grid-row .letter { width: 40px; }
+  .grid-row .qnum { width: 24px !important; }
+  .grid-row .sure { min-width: 52px !important; padding: 0 4px !important; }
+  .grid-row .star { min-width: 28px; padding: 0 2px; }
+}
+.homenav { display: flex; justify-content: space-between; }
+@media (max-width: 560px) { .homenav { display: grid; grid-template-columns: repeat(3, 1fr); } .homenav .back { text-align: center; align-self: auto; } }
+
 /* worth another look */
 .star { flex: none; height: 48px; min-width: 34px; padding: 0 6px; border: none; background: transparent; color: var(--faint); font-size: 20px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .star.on { color: var(--cr); }

@@ -130,7 +130,7 @@ export function Video({ piece, onDone }: { piece: Piece; onDone: (l: Logged | nu
       ) : (
         <div className="row" style={{ justifyContent: "space-between" }}>
           <span className="tiny">{saved ? `Picks up at ${Math.floor(saved.seconds / 60)} min.` : "Done once you've watched most of it."}</span>
-          <button className="back" onClick={() => void finish()}>Mark it watched</button>
+          <button className="btn small outline" onClick={() => void finish()}>Mark it watched</button>
         </div>
       )}
     </Screen>

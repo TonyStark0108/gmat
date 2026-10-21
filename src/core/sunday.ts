@@ -24,7 +24,8 @@ export interface SundayFacts {
 export function noteWeek(now: Date, today: string): string | null {
   const wd = now.getDay();
   if (wd === 0 && now.getHours() >= 17) return weekStartOf(today);
-  if (wd === 1) return plusDays(weekStartOf(today), -7);
+  // Monday before 4 am is still Sunday's study day, so "today" is Sunday and its week is the one just gone
+  if (wd === 1) return now.getHours() < 4 ? weekStartOf(today) : plusDays(weekStartOf(today), -7);
   return null;
 }
 

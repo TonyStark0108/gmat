@@ -16,7 +16,7 @@ export type Tag =
 export interface ExtraSpec {
   id: string;
   kind: "topup" | "extra" | "lean" | "help" | "careless" | "approach" | "keepsharp" | "rebuild" | "tutor"
-    | "check" | "timing" | "recall" | "recap";
+    | "check" | "timing" | "recall" | "recap" | "timed";
   week: string;                 // the study week it belongs to (its Monday)
   section: Section;
   topic: string | null;
@@ -27,7 +27,7 @@ export interface ExtraSpec {
       | { type: "video"; youtubeId: string; url: string }
       | { type: "link"; url: string }
       | { type: "cards"; topic: string }
-      | { type: "rc"; section: string }
+      | { type: "rc"; section: string; passages?: number[] }
       | { type: "book"; book: BookId; qtype: string; numbers: number[] }
       | { type: "recall"; sweep?: string; bus: boolean }      // your error log from memory (weekly, or before a mock)
       | { type: "recap"; week: string };                      // the week's cards, mixed
@@ -87,6 +87,7 @@ export type EventBody =
   | { type: "card.drafted"; item: string; front: string; back: string }      // Claude's draft of a card from a mistake
   // ---- worth another look: a question you got right that you want back (or one the app flags)
   | { type: "look"; item: string; on: boolean }
+  | { type: "retired"; item: string }                                         // recorded once, so the count never drops
   // ---- when life happens
   | { type: "lifeup"; kind: "tonight" | "weekend" | "week"; from: string; to: string }
   | { type: "datecheck"; week: string; result: "safe" | "risk" | "past"; projected: string | null; target: string | null; extra?: number | null; choice?: "move" | "keep" | "fit" | "later" }

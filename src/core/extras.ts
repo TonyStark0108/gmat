@@ -61,7 +61,10 @@ export function specToPiece(s: ExtraSpec, addedDay: string): ExtraPiece {
     t.needs_desk = !o.bus;
     t.bus_ok = o.bus;
     t.offline_ok = true;
-  } else t = synthTask(id, s.section, "rc_section", s.title, s.minutes, { type: "lsat_rc", section: o.section, count: 0 });
+  } else {
+    t = synthTask(id, s.section, "rc_section", s.title, s.minutes, { type: "lsat_rc", section: o.section, count: 0, ...(o.passages ? { passages: o.passages } : {}) });
+    if (s.kind === "timed") t.timed = true;
+  }
   if (s.kind === "keepsharp" && o.type === "list") t.timed = true;
   return piece(t, { xkind: s.kind, week: s.week, availableFrom: addedDay, hidden: !!s.hidden, spec: s, reason: s.reason });
 }

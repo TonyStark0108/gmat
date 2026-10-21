@@ -9,6 +9,7 @@ import type { Section } from "../../core/content";
 import { otherList } from "../../core/links";
 import type { Piece } from "../../core/pieces";
 import { DI_TYPE_OF, listTopic } from "../../core/topics";
+import { weekStartOf } from "../../core/calendar";
 import { record } from "../../data/db";
 import { Back, Screen } from "../bits";
 import { SUBJECT, pointerOf, titleOf, whereOf } from "../copy";
@@ -47,14 +48,16 @@ export function Outside({ piece, onDone }: { piece: Piece; onDone: (l: Logged | 
     const out: { label: string; url: string }[] = [];
     if (Array.isArray(ptr.links)) out.push(...(ptr.links as { label: string; url: string }[]));
     else if (ptr.lists) {
-      const order = t.plan_week <= 2 ? ["easy", "mixed", "medium"] : ["mixed", "medium", "easy"];
+      const order = t.plan_week <= 2 ? ["easy", "mixed", "medium"] : ["medium", "mixed", "easy"];   // from week 8 the plan recommends the Sub-655 list
       const ks = Object.keys(ptr.lists).sort((a, b) => order.indexOf(a) - order.indexOf(b));
       out.push(...ks.map((key) => ({ label: key === "easy" ? "Easier list" : key === "older_og" ? "Older OG questions" : key === "lsat" ? "LSAT questions" : key === "medium" ? "Medium list" : "Mixed difficulty", url: ptr.lists![key] })));
     } else if (ptr.lists_pool) out.push(...ptr.lists_pool.map((l) => ({ label: `${l.topic ?? "mixed"} (${l.qtype === "GT" ? "graphs & tables" : l.qtype})`, url: l.url })));
     else if (ptr.recipe) out.push(...ptr.recipe.filter((r) => r.url).map((r) => ({ label: r.source, url: r.url! })));
     else if (ptr.sections_from) {
-      for (const [sec, ls] of Object.entries(ptr.sections_from as Record<string, { topic: string | null; url: string }[]>)) {
-        out.push(...ls.slice(0, 3).map((l) => ({ label: `${sec === "di" ? "DI" : sec}: ${l.topic ?? "mixed"}`, url: l.url })));
+      // quant and DI come as lists; the verbal section is CR links and reading passages (below)
+      for (const [sec, ls] of Object.entries(ptr.sections_from as Record<string, unknown>)) {
+        if (!Array.isArray(ls)) continue;
+        out.push(...(ls as { topic: string | null; url: string }[]).slice(0, 3).map((l) => ({ label: `${sec === "di" ? "DI" : sec}: ${l.topic ?? "mixed"}`, url: l.url })));
       }
     } else if (ptr.url) out.push({ label: t.kind === "admin" ? "Open the page" : "Open it", url: ptr.url });
     return out.filter((l) => !d.deadLinks.has(l.url));
@@ -111,10 +114,12 @@ export function Outside({ piece, onDone }: { piece: Piece; onDone: (l: Logged | 
     </div>
   );
 
-  const how = t.kind === "gmatclub_set" || t.kind === "di_set"
-    ? timed ? `A timed section: ${ptr.count ?? piece.count ?? 21} questions, 45 minutes, in one go. Noteboard, not paper.`
+  const verbal = timedVerbal(ptr);
+  const how = verbal && t.kind !== "mock" ? `A timed verbal section: ${verbal.cr} CR questions, then ${verbal.passages} reading passages, 45 minutes in all, in one go.`
+    : t.kind === "gmatclub_set" || t.kind === "di_set"
+    ? timed ? `A timed section: ${(ptr.questions as number | undefined) ?? ptr.count ?? piece.count ?? 21} questions, 45 minutes, in one go. Noteboard, not paper.`
       : `Work down the list: ${ptr.count ?? piece.count ?? 10} you haven't done.${ptr.how ? " " + String(ptr.how) : ""} For each wrong one, click Send to GMAT app in your bookmarks bar.`
-    : t.kind === "mock" ? "Three timed sections, 45 minutes each, with the real test's breaks. Answer every question; blanks cost more than guesses." : "";
+    : t.kind === "mock" ? "Three timed sections, 45 minutes each, with the real test's breaks: quant and DI from the lists below, verbal from the CR links and reading passages. Answer every question; blanks cost more than guesses." : "";
   const table = (ptr.types as string[] | undefined)?.includes("TA");
 
   if (refresher && !refreshed) {
@@ -141,6 +146,8 @@ export function Outside({ piece, onDone }: { piece: Piece; onDone: (l: Logged | 
         {pointerOf(piece, content) && <div className="ptr" style={{ background: k.t }}>{pointerOf(piece, content)}</div>}
         {how && <div className="muted" style={{ fontSize: 16, lineHeight: 1.4 }}>{how}</div>}
         {table && <div className="small">Table questions: find the column the question is about before reading any rows.</div>}
+
+        {verbal && <VerbalMaterial piece={piece} cr={verbal.cr} passages={verbal.passages} />}
 
         {printedTPA?.numbers && !gridDone && (
           <div className="box">
@@ -196,6 +203,48 @@ export function Outside({ piece, onDone }: { piece: Piece; onDone: (l: Logged | 
         )}
       </div>
     </Screen>
+  );
+}
+
+/** A timed verbal section (and the verbal part of the stand-in mock): CR questions and reading passages. */
+function timedVerbal(ptr: Piece["task"]["pointer"]): { cr: number; passages: number } | null {
+  const v = (ptr.sections_from as Record<string, unknown> | undefined)?.verbal;
+  if (ptr.cr && ptr.rc) return { cr: (ptr.cr as { questions?: number }).questions ?? 13, passages: (ptr.rc as { passages?: number }).passages ?? 3 };
+  if (v && !Array.isArray(v)) return { cr: 13, passages: 3 };
+  return null;
+}
+
+/**
+ * The CR questions come from the last reserve CR set not done yet (rides take reserve sets from the
+ * front, so these never clash); the passages from a reading set the plan doesn't use, in the reader.
+ */
+function VerbalMaterial({ piece, cr, passages }: { piece: Piece; cr: number; passages: number }) {
+  const { content, d, today } = useApp();
+  if (!content) return null;
+  const set = [...content.cr_bank.reserve_sets].reverse().find((s) => !d.done.has(`x:reserve:${s.id}#0`));
+  const used = new Set([...content.plan.tasks.filter((x) => x.kind === "rc_section").map((x) => x.pointer.section),
+    ...[...d.extras.values()].filter((x) => x.open.type === "rc").map((x) => (x.open as { section: string }).section)]);
+  const id = `timedrc:${piece.id}`;
+  const mine = d.extras.get(id);
+  const section = mine?.open.type === "rc" ? mine.open.section : content.rc_bank.sections.find((s) => !used.has(s.id))?.id;
+  const openPassages = async () => {
+    if (!section) return;
+    if (!mine) await record({ type: "extra.added", extra: { id, kind: "timed", week: weekStartOf(today), section: "rc", topic: "rc", title: `${passages} reading passages, timed`, minutes: 25, hidden: true,
+      open: { type: "rc", section, passages: Array.from({ length: passages }, (_, i) => i) } } });
+    go(`/task/${encodeURIComponent(`x:${id}#0`)}`);
+  };
+  return (
+    <div className="box" style={{ gap: 8 }}>
+      <div className="eyebrow">Verbal</div>
+      {set ? (
+        <>
+          <div style={{ fontSize: 17 }}>{cr} CR questions, in order (from a reserve set: {set.label}):</div>
+          <div className="row wrap" style={{ gap: 6 }}>{set.questions.slice(0, cr).map((q) => <LinkOut key={q.n} url={q.url} label={String(q.n)} />)}</div>
+        </>
+      ) : <div className="small">Every reserve CR set is done. Use {cr} CR questions from any CR set you haven't seen.</div>}
+      {section ? <button className="btn small outline" style={{ alignSelf: "flex-start" }} onClick={() => void openPassages()}>Then {passages} reading passages, in the reader</button>
+        : <div className="small">Every reading set is in use; take {passages} passages from the Verbal Review instead.</div>}
+    </div>
   );
 }
 

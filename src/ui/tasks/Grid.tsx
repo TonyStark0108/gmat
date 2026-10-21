@@ -80,6 +80,8 @@ export function BookGrid({ piece, onDone, numbers, bookId, embedded, onSubmitted
   }
 
   const answered = nums.filter((n) => cur(n)?.value).length;
+  // logged already: it reads as logged (a correction goes through "I entered it wrong" in the review)
+  const logged = !embedded && d.submitted.has(piece.id);
 
   async function submit() {
     const entries = nums.map((n) => ({ value: cur(n)?.value ?? null, unsure: !!cur(n)?.unsure, key: keys.get(n)?.answer }));
@@ -99,7 +101,8 @@ export function BookGrid({ piece, onDone, numbers, bookId, embedded, onSubmitted
 
   const body = (
     <>
-      <input ref={inputRef} autoFocus value={typed} onChange={(e) => setTyped(e.target.value)} onKeyDown={onTyped}
+      {logged && <div className="note"><div style={{ fontSize: 17 }}>This one's logged. To change an answer, use “I entered it wrong” in its review. Stars work here as usual.</div></div>}
+      <input ref={inputRef} autoFocus={!logged} disabled={logged} value={typed} onChange={(e) => setTyped(e.target.value)} onKeyDown={onTyped}
         placeholder={`Type ${a}c, or ${a}cs for not sure, then Enter. A letter on its own answers the next one.`}
         style={{ height: 46, border: "1.5px solid var(--line-2)", borderRadius: 10, padding: "0 12px", font: "400 13px var(--mono)", background: "#fff" }} />
       {hint && <div className="small">{hint}</div>}
@@ -108,8 +111,8 @@ export function BookGrid({ piece, onDone, numbers, bookId, embedded, onSubmitted
         {nums.map((n) => {
           const c = cur(n);
           return (
-            <div key={n} className="row" style={{ gap: 6, minHeight: 56, borderBottom: "1.5px solid #f0ebe2" }}>
-              <span className="mono" style={{ fontWeight: 700, fontSize: 12, width: 34, flex: "none" }}>{n}</span>
+            <div key={n} className="row grid-row" style={{ gap: 6, minHeight: 56, borderBottom: "1.5px solid #f0ebe2", flexWrap: "wrap" }}>
+              <span className="mono qnum" style={{ fontWeight: 700, fontSize: 12, width: 34, flex: "none" }}>{n}</span>
               {isTPA(n) ? (
                 <TwoPartPicker rows={rowsOf(n)} value={Array.isArray(c?.value) ? c!.value : null} color={k.c}
                   onPick={(v) => void put(n, v, !!c?.unsure)} />
@@ -117,13 +120,13 @@ export function BookGrid({ piece, onDone, numbers, bookId, embedded, onSubmitted
                 LETTERS.map((L) => {
                   const on = c?.value === L;
                   return (
-                    <button key={L} className="letter" aria-pressed={on} onClick={() => void put(n, L, !!c?.unsure)}
+                    <button key={L} className="letter" aria-pressed={on} disabled={logged} onClick={() => void put(n, L, !!c?.unsure)}
                       style={{ background: on ? k.c : "#fff", color: on ? "var(--paper)" : "var(--ink)", borderColor: on ? k.c : "var(--line-2)" }}>{L}</button>
                   );
                 })
               )}
               <Star item={`${piece.taskId}|${n}`} />
-              <button onClick={() => void put(n, c?.value ?? null, !c?.unsure)}
+              <button className="sure" disabled={logged} onClick={() => void put(n, c?.value ?? null, !c?.unsure)}
                 style={{ marginLeft: "auto", height: 48, minWidth: 64, padding: "0 8px", borderRadius: 9, border: "1.5px solid #e2ddd2", font: "400 10px var(--mono)", cursor: "pointer",
                   background: c?.unsure ? "var(--ink)" : "transparent", color: c?.unsure ? "var(--paper)" : "var(--muted)", whiteSpace: "nowrap" }}>
                 {c?.unsure ? "not sure" : "sure"}
@@ -136,7 +139,7 @@ export function BookGrid({ piece, onDone, numbers, bookId, embedded, onSubmitted
         <span className="small">{answered} of {nums.length} entered</span>
         <span className="tiny" title="Solve it from the PDF on screen instead, or leave it: it won't count against you.">Can't find one? Solve it from the PDF, or leave it blank.</span>
       </div>
-      {confirm && answered < nums.length ? (
+      {logged ? null : confirm && answered < nums.length ? (
         <div className="note">
           <div style={{ fontSize: 18 }}>{nums.length - answered} left blank. Log it anyway?</div>
           <div className="row">

@@ -46,7 +46,7 @@ export function starterFor(m: Model, ctx: string | null): Starter | null {
     const misses = m.d.mockMisses.get(arg) ?? [];
     return {
       mode: "mock", title: `Mock, ${longDate(r.day)}`, wantsPhoto: false,
-      text: `I just took ${r.official ? `Official Practice Exam ${r.exam}` : "a timed section set"} (plan week ${r.planWeek}): total ${r.total ?? "?"}, Quant ${r.quant ?? "?"}, Verbal ${r.verbal ?? "?"}, DI ${r.di ?? "?"}.${misses.length ? ` Misses I tagged: ${misses.map((x) => `${x.section} ${x.topic} (${x.tag})`).join("; ")}.` : ""} What does this tell us, and what should change?`,
+      text: `I just took ${r.official ? `Official Practice Exam ${r.exam}` : "a timed section set"} (plan week ${r.planWeek}): total ${r.total ?? "?"}, Quant ${r.quant ?? "?"}, Verbal ${r.verbal ?? "?"}, DI ${r.di ?? "?"}.${misses.length ? ` Misses I tagged: ${misses.map((x) => `${x.section} ${x.topic} (${x.tag})`).join("; ")}.` : ""} What does this tell us, and what would you change?`,
     };
   }
   if (kind === "checkin") {

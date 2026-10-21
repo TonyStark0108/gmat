@@ -74,7 +74,7 @@ export function CardSession({ topic, piece, recap, warm, then }: { topic?: strin
     <Screen>
       <div className="column">
         <div className="row" style={{ justifyContent: "space-between" }}>
-          <Back label={warm ? "Skip the warm-up" : "← Today · pause"} onClick={() => void finish()} />
+          <Back label={warm ? "← Today" : "← Today · pause"} onClick={() => (warm ? go("/") : void finish())} />
           {(warm || recap) && <span className="tiny">{list.length - queue.length + 1} of {list.length}</span>}
         </div>
         <div className="eyebrow" style={{ color: "var(--rc-d)" }}>{warm ? "Warm-up · " : recap ? "This week's recap · " : ""}Cards{c.source === "error" ? " · from a review" : c.source === "video" ? " · from a video" : c.source === "method" ? " · method" : c.source === "topic" ? " · a rule" : ""}</div>
@@ -85,6 +85,7 @@ export function CardSession({ topic, piece, recap, warm, then }: { topic?: strin
         {back && editing !== c.id && <button className="back" onClick={() => setEditing(c.id)}>Edit the front</button>}
         {editing === c.id && <EditFront card={c} current={front} onDone={() => setEditing(null)} />}
         <div className="spacer" />
+        {warm && !back && <button className="btn ghost small" onClick={() => void finish()}>Skip the warm-up</button>}
         {!back ? (
           <button className="btn" onClick={() => setBack(true)}>Show <span className="tiny" style={{ marginLeft: 8, color: "inherit" }}>space</span></button>
         ) : (

@@ -6,7 +6,7 @@ import { QUANT_TOPICS } from "../core/topics";
 import { saveTutorCap, saveTutorEffort, saveTutorKey, tutorPrefs, type TutorPrefs } from "../data/tutorPrefs";
 import { go } from "../app/router";
 import { useApp } from "../app/store";
-import { DAY_NAMES, daysBetween, longDate, parseYmd, weekStartOf } from "../core/calendar";
+import { DAY_NAMES, daysBetween, longDate, parseYmd, weekStartOf, ymd } from "../core/calendar";
 import { now } from "../core/clock";
 import type { Settings as S } from "../core/settings";
 import { extraDeskFor, projectFinish } from "../core/week";
@@ -42,7 +42,7 @@ export function useFinish() {
 }
 
 export function DateFields({ showMore }: { showMore?: boolean }) {
-  const { d } = useApp();
+  const { d, today } = useApp();
   const s = d.settings;
   const [more, setMore] = useState(!!showMore);
   const { auto, need } = useFinish();
@@ -75,11 +75,11 @@ export function DateFields({ showMore }: { showMore?: boolean }) {
         <span className="tiny">to</span>
         <input type="time" value={s.mornings.end} onChange={(e) => void setSetting({ mornings: { ...s.mornings, end: e.target.value } })} />
       </Field>
-      <div className="row wrap" style={{ gap: 6, padding: "8px 0", borderBottom: "1.5px solid var(--line)", justifyContent: "flex-end" }}>
+      <div className="row wrap" style={{ gap: 4, padding: "8px 0", borderBottom: "1.5px solid var(--line)", justifyContent: "flex-end" }}>
         {[1, 2, 3, 4, 5, 6, 0].map((wd) => {
           const on = s.mornings.days.includes(wd);
           return <button key={wd} onClick={() => dayToggle(wd)} className="mono"
-            style={{ minWidth: 48, height: 40, borderRadius: 10, border: "1.5px solid var(--line-3)", background: on ? "var(--ink)" : "transparent", color: on ? "var(--paper)" : "var(--muted)", fontSize: 12, cursor: "pointer" }}>{DAY_NAMES[wd].slice(0, 3)}</button>;
+            style={{ minWidth: 44, height: 40, borderRadius: 10, border: "1.5px solid var(--line-3)", background: on ? "var(--ink)" : "transparent", color: on ? "var(--paper)" : "var(--muted)", fontSize: 12, cursor: "pointer" }}>{DAY_NAMES[wd].slice(0, 3)}</button>;
         })}
       </div>
       <Field label="Finish">
@@ -94,7 +94,9 @@ export function DateFields({ showMore }: { showMore?: boolean }) {
         <Field label="Hard stop"><input type="date" value={s.hardStop} onChange={(e) => void setSetting({ hardStop: e.target.value })} /></Field>
         <Field label="Bus time counts"><button className="toggle" onClick={() => void setSetting({ busCounts: !s.busCounts })}>{s.busCounts ? "on" : "off"}</button></Field>
         <Field label="Verbal Review sets on the bus"><button className="toggle" onClick={() => void setSetting({ verbalReviewOnBus: !s.verbalReviewOnBus })}>{s.verbalReviewOnBus ? "on" : "off"}</button></Field>
-        <Field label="Practice-run mock in week 1"><button className="toggle" onClick={() => void setSetting({ practiceRun: !s.practiceRun })}>{s.practiceRun ? "on" : "off"}</button></Field>
+        <Field label="Practice-run mock in week 1">{today > s.startDate
+          ? <span className="small">{s.practiceRun ? "on" : "off"} (set before the plan starts)</span>
+          : <button className="toggle" onClick={() => void setSetting({ practiceRun: !s.practiceRun })}>{s.practiceRun ? "on" : "off"}</button>}</Field>
         {s.practiceRun && (
           <div className="note" style={{ margin: "6px 0" }}>
             <div style={{ fontSize: 16 }}>{s.practiceRunKind === "official"
@@ -153,15 +155,19 @@ export function BackupNote() {
   const { d, now: t } = useApp();
   const [busy, setBusy] = useState(false);
   const week = 7 * 86_400_000;
-  const due = !d.lastBackup || t.getTime() - d.lastBackup > 30 * 3_600_000;
+  // with a folder, the backup is automatic and daily: a note means the browser wants your OK again.
+  // Without one, a weekly copy is the backup (from the first Sunday, never on day one).
+  const folder = d.backupFolder || !!d.dayOne.folder?.ok;
+  const since = d.lastBackup ?? d.dayOne.folder?.ts ?? null;
+  const due = folder ? !!since && t.getTime() - since > 30 * 3_600_000 : (d.lastBackup ? t.getTime() - d.lastBackup > week : t.getDay() === 0 && !!d.setupDay && d.setupDay < ymd(t));
   const sundayish = t.getDay() === 0 || t.getDay() === 1;
   const needOffsite = sundayish && d.lastBackup && (!d.offsiteAt || t.getTime() - d.offsiteAt > 6 * 86_400_000) && t.getTime() - d.lastBackup < week;
   if (!d.setupDone) return null;
   if (due) {
     return (
       <div className="note">
-        <div className="eyebrow">Today's backup</div>
-        <div style={{ fontSize: 18 }}>The automatic backup needs your OK again (the browser asks for the folder from time to time). One tap.</div>
+        <div className="eyebrow">{folder ? "Today's backup" : "This week's backup"}</div>
+        <div style={{ fontSize: 18 }}>{folder ? "The automatic backup needs your OK again (the browser asks for the folder from time to time). One tap." : "A copy of everything, saved as one file. One tap."}</div>
         <button className="btn small outline" disabled={busy} onClick={async () => { setBusy(true); await backupNow(true); setBusy(false); }}>Back up now</button>
       </div>
     );
@@ -295,7 +301,7 @@ function TutorSettings({ say }: { say: (m: string) => void }) {
           <button className="tiny back" onClick={async () => { await saveTutorKey(null); reload(); say("Key removed from this browser."); }}>remove</button>
         </> : <>
           <input type="password" value={k} onChange={(e) => setK(e.target.value)} placeholder="sk-ant-…" autoComplete="off" style={{ width: 200 }} />
-          <button className="btn small outline" style={{ height: 40 }} disabled={!k.trim().startsWith("sk-ant-")} onClick={async () => { await saveTutorKey(k); setK(""); reload(); say("Saved in this browser only."); }}>Save</button>
+          <button className="btn small outline" style={{ height: 40 }} disabled={!k.trim().startsWith("sk-ant-")} onClick={async () => { await saveTutorKey(k); setK(""); reload(); say("Kept in this browser, nowhere else."); }}>Save</button>
         </>}
       </Field>
       <Field label="Monthly cap">

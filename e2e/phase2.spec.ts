@@ -125,7 +125,7 @@ test("phases 2 and 3, end to end", async () => {
     await page.keyboard.press("a"); await page.keyboard.press("Enter"); await page.waitForTimeout(150);
     await page.keyboard.press("1"); await page.keyboard.press("Enter"); await page.waitForTimeout(150);
   }
-  await expect(page.getByText(/of \d+ right\./)).toBeVisible();
+  await expect(page.getByText(/of \d+ right\.|Not this time\. They come back\./)).toBeVisible();
   await snap(page, "Done: how many came right. Anything retired says so.");
   await page.keyboard.press("Enter");
   await settled(page);
@@ -228,7 +228,13 @@ test("phases 2 and 3, end to end", async () => {
   await page.goto("/#/");
   await jumpTo(ctx, page, at("2027-07-02T19:00"));
   await expect(card(page).locator(".t")).toHaveText("Back. That's the whole game.");
-  // the weekly date check (audit C12) comes first: one note at a time
+  // the welcome comes alone: no notes, no decisions, nothing about the gap (audit, 21 Oct 2026)
+  await expect(page.locator(".note")).toHaveCount(0);
+  await snap(page, "Months away from the app: the warmest welcome, alone on the screen. A few cards first; everything else waits.");
+  await card(page).getByRole("button", { name: "Cards" }).click();
+  await page.goto("/#/");
+  await settled(page);
+  // then the weekly date check (audit C12): one note at a time
   if (await page.getByText("Two ways to go.").isVisible()) {
     await snap(page, "Months away from the app: the weekly date check noticed, and offers moving the finish date first.");
     await page.getByRole("button", { name: "Decide later" }).click();

@@ -28,6 +28,7 @@ export interface Derived {
   drills: Map<string, Of<"drill">[]>;
   outside: Map<string, Of<"outside">>;
   weeks: Map<string, Of<"week.built">>;
+  weekAsked: Map<string, Set<string>>;   // every chip any build of a week asked for
   counted: Set<string>;
   restTapped: Set<string>;
   level: number;
@@ -46,6 +47,7 @@ export interface Derived {
   lastActiveDay: string | null;          // last day you actually did something
   activeDays: string[];                  // every day you did something, in order
   lastBackup: number | null;
+  backupFolder: boolean;                 // backups go to a folder (daily); otherwise they're downloads (weekly)
   offsiteAt: number | null;
   admin: Map<string, Of<"admin">>;
   lines: Of<"line">[];
@@ -53,6 +55,7 @@ export interface Derived {
   reviewStarted: Map<string, { items: string[]; ts: number; day: string }>;
   reviewDone: Map<string, { ts: number; day: string }>;
   reviewStep: Map<string, ReviewStep>;
+  reviewTouched: Set<string>;            // reviews with an answer or a step in them (opening one isn't starting it)
   attempts: Map<string, ReviewAttempt[]>;   // item -> attempts in reviews
   tags: Map<string, { tag: Tag; line?: string; ts: number; day: string }>;
   keysEntered: Map<string, string | number[]>;
@@ -71,6 +74,7 @@ export interface Derived {
   offerDays: Set<string>;
   drafts: Map<string, { front: string; back: string }>;
   looks: Map<string, { on: boolean; ts: number; day: string }>;
+  retiredItems: Set<string>;
   // life
   datechecks: Of<"datecheck">[];
   letgo: Map<string, boolean>;           // task -> keep?
@@ -99,14 +103,14 @@ export function derive(events: AppEvent[], sectionOf: (pieceId: string) => Secti
   const d: Derived = {
     settings: structuredClone(DEFAULT_SETTINGS), setupDone: false, setupDay: null, dayOne: {}, done: new Set(), doneAt: new Map(),
     started: new Map(), startedMode: new Map(), submitted: new Map(), answers: new Map(), rcPlace: new Map(), rcLines: new Map(), rcFlags: new Map(),
-    video: new Map(), drills: new Map(), outside: new Map(), weeks: new Map(), counted: new Set(), restTapped: new Set(), level: 0,
+    video: new Map(), drills: new Map(), outside: new Map(), weeks: new Map(), weekAsked: new Map(), counted: new Set(), restTapped: new Set(), level: 0,
     bus: { on: false, since: null }, busEvents: [], minutesByDay: new Map(), minutesBySection: new Map(), lateSessions: new Set(), morningDays: new Set(),
     totalMinutes: 0, skipsByDay: new Map(), skips: [], mixByDay: new Map(), timechipByDay: new Map(), lastSeen: new Map(),
-    lastActiveDay: null, activeDays: [], lastBackup: null, offsiteAt: null, admin: new Map(), lines: [],
-    reviewStarted: new Map(), reviewDone: new Map(), reviewStep: new Map(), attempts: new Map(), tags: new Map(),
+    lastActiveDay: null, activeDays: [], lastBackup: null, backupFolder: false, offsiteAt: null, admin: new Map(), lines: [],
+    reviewStarted: new Map(), reviewDone: new Map(), reviewStep: new Map(), reviewTouched: new Set(), attempts: new Map(), tags: new Map(),
     keysEntered: new Map(), keyOverrides: new Map(), bookChecks: [],
     introduced: new Map(), introWeeks: new Set(), cardRatings: new Map(), cardFront: new Map(), cardPaused: new Set(),
-    cardDeleted: new Set(), cardSessions: [], cardKept: new Map(), offered: new Map(), offerDays: new Set(), drafts: new Map(), looks: new Map(),
+    cardDeleted: new Set(), cardSessions: [], cardKept: new Map(), offered: new Map(), offerDays: new Set(), drafts: new Map(), looks: new Map(), retiredItems: new Set(),
     datechecks: [], letgo: new Map(), extras: new Map(), offers: new Map(), offersAt: new Map(), shared: [], qlogs: [], deadLinks: new Map(),
     crSwaps: [], videoChecks: new Map(), mockMoved: new Map(), mockMisses: new Map(), booking: [], testResult: null,
     seen: new Map(), restoredAt: null, tutorNotes: [], tutorSpend: new Map(), eventCount: events.length,
@@ -172,11 +176,17 @@ export function derive(events: AppEvent[], sectionOf: (pieceId: string) => Secti
       case "bus": d.bus = { on: e.on, since: e.on ? e.ts : null }; d.busEvents.push({ on: e.on, ts: e.ts }); break;
       case "mix": d.mixByDay.set(e.day, e.choice); break;
       case "timechip": d.timechipByDay.set(e.day, e.minutes); break;
-      case "week.built": d.weeks.set(e.week, e); break;
+      case "week.built": {
+        d.weeks.set(e.week, e);
+        const asked = d.weekAsked.get(e.week) ?? new Set<string>();
+        e.chips.forEach((c) => asked.add(c.pieceId));
+        d.weekAsked.set(e.week, asked);
+        break;
+      }
       case "week.counted": d.counted.add(e.week); break;
       case "rest.tapped": d.restTapped.add(e.week); break;
       case "level": d.level = Math.max(d.level, e.level); break;
-      case "backup": d.lastBackup = e.ts; break;
+      case "backup": d.lastBackup = e.ts; if (e.where === "folder") d.backupFolder = true; break;
       case "backup.offsite": d.offsiteAt = e.ts; break;
       // A restore brings in another device's history. Week plans are kept (never wiped); the current
       // week is rebuilt around the merged answers, keeping what's done (weekly.ts).
@@ -188,9 +198,10 @@ export function derive(events: AppEvent[], sectionOf: (pieceId: string) => Secti
         const a = d.attempts.get(e.item) ?? [];
         a.push({ attempt: e.attempt, value: e.value, right: e.right, ts: e.ts, day: e.day, review: e.review });
         d.attempts.set(e.item, a);
+        d.reviewTouched.add(e.review);
         break;
       }
-      case "review.step": d.reviewStep.set(e.review, e.step); break;
+      case "review.step": d.reviewStep.set(e.review, e.step); d.reviewTouched.add(e.review); break;
       case "review.tag": d.tags.set(e.item, { tag: e.tag, line: e.line, ts: e.ts, day: d.tags.get(e.item)?.day ?? e.day }); break;
       case "review.done": if (!d.reviewDone.has(e.review)) d.reviewDone.set(e.review, { ts: e.ts, day: e.day }); break;
       case "key.entered": d.keysEntered.set(e.key, e.value); break;
@@ -215,6 +226,7 @@ export function derive(events: AppEvent[], sectionOf: (pieceId: string) => Secti
       case "cards.offered": d.offerDays.add(e.day); for (const id of e.ids) if (!d.offered.has(id)) d.offered.set(id, e.day); break;
       case "card.drafted": d.drafts.set(e.item, { front: e.front, back: e.back }); break;
       case "look": d.looks.set(e.item, { on: e.on, ts: e.ts, day: e.day }); break;
+      case "retired": d.retiredItems.add(e.item); break;
       // ---- life
       case "lifeup": life.push({ from: e.from, to: e.to, mode: e.kind === "week" ? "light" : "off" }); break;
       case "datecheck": d.datechecks.push(e); break;

@@ -7,6 +7,7 @@ import type { EventBody } from "./events";
 import type { Piece } from "./pieces";
 import type { Settings } from "./settings";
 import type { Derived } from "./state";
+import { skippedOut } from "./life";
 import { buildWeek, type WeekPlan } from "./week";
 
 /** The settings a week's plan depends on; if these change, the week is rebuilt. */
@@ -52,11 +53,20 @@ export function weekEvents(pieces: Piece[], d: Derived, s: Settings, today: stri
 /**
  * A week counts when every chip and every review it asked for was done by Sunday night. A rest day is
  * suggested, not required (see restTaken). Stored once, so "weeks done" never drops.
+ *
+ * "Asked for" is everything any build of the week put on it: a rebuild later in the week (a changed
+ * setting, a restore) can't make an unfinished week count by leaving chips off. When "something came
+ * up" covers the week, the rebuilt week is what counts (a light week still counts). Chips you let go,
+ * skipped three times (moved to next week) or a mock moved past Sunday don't hold the week up.
  */
-export function weekCounts(plan: WeekPlan, d: Derived, _today: string, reviewsDone: boolean): boolean {
+export function weekCounts(plan: WeekPlan, d: Derived, _today: string, reviewsDone: boolean, letGo: (pieceId: string) => boolean = () => false): boolean {
   if (plan.pause || plan.chips.length === 0 || !reviewsDone) return false;
-  const end = plusDays(plan.weekStart, 6);
-  return plan.chips.every((c) => d.done.has(c.pieceId) && d.doneAt.get(c.pieceId)!.day <= end);
+  const ws = plan.weekStart, end = plusDays(ws, 6);
+  const lifeWeek = (d.settings.life ?? []).some((b) => b.from <= end && b.to >= ws);
+  const asked = new Set(plan.chips.map((c) => c.pieceId));
+  if (!lifeWeek) for (const id of d.weekAsked.get(ws) ?? []) asked.add(id);
+  return [...asked].every((id) => (d.done.has(id) && d.doneAt.get(id)!.day <= end)
+    || letGo(id) || skippedOut(d, id, ws) || (d.mockMoved.get(id) ?? "") > end);
 }
 
 /** Was a rest day taken this week (tapped, or a day under 15 minutes)? Only for the gentle suggestion. */

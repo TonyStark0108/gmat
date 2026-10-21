@@ -3,6 +3,7 @@
 
 import type { Content, Section, Task } from "./content";
 import type { Settings } from "./settings";
+import { fixedPlan } from "./planFixes";
 
 export type Group = "Q" | "V" | "O"; // quant & DI, verbal, other
 
@@ -32,8 +33,12 @@ export function groupOf(section: Section): Group {
   return section === "quant" || section === "di" ? "Q" : section === "rc" || section === "cr" ? "V" : "O";
 }
 
-/** Official Practice Exams 3–6 take the plan's later test slots, in this order. */
-export const EXAM_SLOTS: Record<number, number> = { 9: 3, 10: 4, 12: 5, 13: 6 };
+/**
+ * With Exams 3–6 bought, every one of the plan's test slots from week 9 gets an official exam, in the
+ * plan's own order: 2 in week 9, 3, then 4 in week 11 (the week that holds Exam 2 when only 1 and 2
+ * are free), 5 and 6.
+ */
+export const EXAM_SLOTS: Record<number, number> = { 9: 2, 10: 3, 11: 4, 12: 5, 13: 6 };
 
 /**
  * Tasks that count as the plan: every plan task, except the week-1 practice run unless it's switched on.
@@ -43,13 +48,16 @@ export const EXAM_SLOTS: Record<number, number> = { 9: 3, 10: 4, 12: 5, 13: 6 };
  */
 export function planTasks(content: Content, settings: Settings): Task[] {
   const standIn = content.plan.tasks.find((t) => t.kind === "mock" && t.pointer.type === "timed_sections");
-  return content.plan.tasks
+  return fixedPlan(content)
     .filter((t) => t.optional !== "setting" || (t.setting === "practice_run_week1" && settings.practiceRun))
     .map((t) => {
       if (t.kind !== "mock") return t;
       const exam = EXAM_SLOTS[t.plan_week];
       if (exam && t.pointer.type === "timed_sections" && settings.exams36 !== "not bought") {
         return { ...t, title: `Official Practice Exam ${exam}, fresh`, pointer: { type: "official_mock", exam, stand_in: t.pointer } };
+      }
+      if (exam && t.pointer.type === "official_mock" && t.pointer.exam === 2 && settings.exams36 !== "not bought") {
+        return { ...t, title: `Official Practice Exam ${exam}, fresh`, pointer: { ...t.pointer, exam } };
       }
       if (t.pointer.practice_run && settings.practiceRunKind !== "official" && standIn) {
         return { ...t, title: "Practice run: timed sections (not an official exam)", pointer: { ...standIn.pointer, practice_run: true } };

@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { go } from "../app/router";
 import { useApp } from "../app/store";
-import { daysBetween, longDate, plusDays, weekStartOf } from "../core/calendar";
+import { daysBetween, longDate, plusDays, weekCapacity, weekStartOf } from "../core/calendar";
 import { keepDatePlan } from "../core/life";
 import { askLetGo } from "../core/life";
 import { bookingCard, week8Checkpoint } from "../core/mocks";
@@ -29,6 +29,8 @@ export function NoteStack() {
   const a = useApp();
   const { m, d, today, now } = a;
   const s = d.settings;
+  // back after a week or more: the welcome and a few cards come first; notes wait for after
+  if (m.back) return null;
 
   // 1. a level reached: one calm note, shown once
   const lv = LEVELS.find((L) => L.n === d.level);
@@ -49,7 +51,7 @@ export function NoteStack() {
       <div className="note">
         <div className="eyebrow">After Official Exam 1</div>
         <div style={{ fontSize: 19 }}>Exam 1 came in at {cp.total}. Your target is {cp.target}, so this is the point to give the plan more room rather than carry on as if nothing changed.</div>
-        <div style={{ fontSize: 17 }}>The proposal: {cp.weeks} more weeks. Finish {longDate(cp.finish)}; book-by {longDate(cp.bookBy)}. The extra weeks go to your weakest areas, more official practice and the tutor.{cp.limited ? " (That's as far as it goes while a retake still fits before your hard stop.)" : ""}</div>
+        <div style={{ fontSize: 17 }}>The proposal: {cp.weeks} more weeks. Finish {longDate(cp.finish)}; book-by {longDate(cp.bookBy)}. The extra weeks go to your weakest areas, more official practice and the tutor.{cp.limited ? " (That's as far as it goes while a retake fits before your hard stop.)" : ""}</div>
         <div className="row wrap">
           <button className="btn small outline" onClick={async () => {
             await record({ type: "offer", offer: cp.id, answer: "yes" });
@@ -137,7 +139,8 @@ function DateCheckNote() {
   const { d } = useApp();
   const check = [...d.datechecks].reverse().find((x) => !x.choice)!;
   const s = d.settings;
-  const plan = check.result === "risk" && check.extra ? keepDatePlan(s, check.extra) : null;
+  const cap = weekCapacity(weekStartOf(useApp().today), s);
+  const plan = check.result === "risk" && check.extra ? keepDatePlan(s, check.extra, cap.rawDesk + cap.rawBus) : null;
   const choose = async (choice: "move" | "keep" | "fit" | "later") => {
     await record({ ...check, type: "datecheck", choice } as never);
     if (choice === "move" && check.projected) await setSetting({ finishDate: s.testDate ? s.finishDate : check.projected, agreedFinish: check.projected });

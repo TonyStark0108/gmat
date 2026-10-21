@@ -73,7 +73,7 @@ export function whereOf(p: Piece): string {
     case "mock": return t.pointer.type === "official_mock" ? "opens mba.com" : "opens GMAT Club";
     case "admin": return "opens the page";
     case "cards": return "reads here";
-    case "recall": return "here, with the book";
+    case "recall": return "with the book";
     default: return "opens the page";
   }
 }

@@ -167,7 +167,7 @@ function Finished({ id, items, onLeave }: { id: string; items: Item[]; onLeave: 
   return (
     <Screen><div className="column">
       <div className="eyebrow">Done</div>
-      <div className="title">{inWords(right)} of {items.length} right.</div>
+      <div className="title">{right ? `${inWords(right)} of ${items.length} right.` : "Not this time. They come back."}</div>
       {retiredHere > 0 && <div style={{ fontSize: 19 }}>{inWords(retiredHere)} retired today.</div>}
       <div className="spacer" />
       <button className="btn" autoFocus onClick={() => { onLeave(); go("/"); }}>Back to today</button>

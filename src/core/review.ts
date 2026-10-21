@@ -315,7 +315,7 @@ function ladder(it: Item, d: Derived, setReview: { status: SetStatus; doneDay: s
 
 function setStatus(id: string, hasItems: boolean, windowFrom: string, d: Derived, today: string): SetStatus {
   if (d.reviewDone.has(id)) return "done";
-  if (d.reviewStarted.has(id)) return "started";
+  if (d.reviewStarted.has(id) && d.reviewTouched.has(id)) return "started";
   if (!hasItems) return "none";
   if (today < windowFrom) return "waiting";
   if (daysBetween(windowFrom, today) >= LAPSE_AFTER) return "lapsed";
@@ -395,12 +395,14 @@ export function buildReviews(inp: ReviewInput): ReviewModel {
   }
 
   let retired = 0, inReview = 0, stubborn = 0, errorsSoFar = 0, look = 0;
+  // a retirement is kept even if a later correction (a failed spot check, "My book says…") changes the marking
+  for (const id of d.retiredItems) { const it = items.get(id); if (!it || !it.entered || it.firstMark === "unknown") retired++; }
   for (const it of items.values()) {
     if (it.state === "look") look++;
     // a question whose answer isn't known yet (a CR set before its review) isn't an error yet
     if (!it.entered || it.firstMark === "unknown") continue;
     errorsSoFar++;
-    if (it.retiredDay) retired++;
+    if (it.retiredDay || d.retiredItems.has(it.id)) retired++;
     else if (it.state === "stubborn") stubborn++;
     else if (it.state === "review" || it.state === "redo" || it.state === "return") inReview++;
   }
@@ -408,7 +410,7 @@ export function buildReviews(inp: ReviewInput): ReviewModel {
   // A mixed review you started and didn't finish comes back as "Waiting where you left it".
   let openMixed: ReviewModel["openMixed"] = null;
   for (const [id, r] of d.reviewStarted) {
-    if (!id.startsWith("mixed:") || d.reviewDone.has(id)) continue;
+    if (!id.startsWith("mixed:") || d.reviewDone.has(id) || !d.reviewTouched.has(id)) continue;
     const its = r.items.map((x) => items.get(x)).filter(Boolean) as Item[];
     if (its.length) openMixed = { id, items: its };
   }
@@ -439,7 +441,7 @@ export function fitsItem(it: Item, f: MixedFilter): boolean {
  */
 export function mixedSession(m: ReviewModel, d: Derived, today: string, f: MixedFilter, weight: (topic: string) => number = () => 1, stubborn = false): Item[] {
   const busy = new Set<string>();
-  for (const [id, r] of d.reviewStarted) if (id.startsWith("mixed:") && !d.reviewDone.has(id)) r.items.forEach((x) => busy.add(x));
+  for (const [id, r] of d.reviewStarted) if (id.startsWith("mixed:") && !d.reviewDone.has(id) && d.reviewTouched.has(id)) r.items.forEach((x) => busy.add(x));
   // the stubborn ones get their own session, so they don't crowd the regular redos
   const due = [...m.items.values()].filter((it) => !busy.has(it.id) && dueToday(it, d, today) && fitsItem(it, f) && (it.state === "stubborn") === stubborn);
   due.sort((a, b) => (weight(b.topic) - weight(a.topic)) || (a.dueFrom! < b.dueFrom! ? -1 : a.dueFrom! > b.dueFrom! ? 1 : 0));

@@ -323,14 +323,14 @@ function Close({ s, header, done }: { s: SR; header: React.ReactNode; done: () =
       {sum.add && <div className="small">Added to next week: {sum.add.title}.</div>}
       {rem.lines.map((l) => <div key={l} style={{ fontSize: 17 }}>{l}</div>)}
       {offers.map((o) => <TopupOffer key={o.id} offer={o} />)}
-      {(rem.teach || rem.walk) && (
+      {!offers.length && (rem.teach || rem.walk) && (
         <div className="row wrap" style={{ gap: 8 }}>
           {rem.teach && <button className="btn small outline" onClick={async () => { await finish(false); go(`/tutor?ctx=${encodeURIComponent(`topic:${rem.teach}`)}`); }}>Learn {topicName(rem.teach).toLowerCase()} again with the tutor</button>}
           {rem.walk && <button className="btn small outline" onClick={async () => { await finish(false); go(`/tutor?ctx=${encodeURIComponent(`topic:${rem.walk}`)}`); }}>Walk through a {topicName(rem.walk).toLowerCase()} question with the tutor</button>}
         </div>
       )}
       {(rem.teach || rem.walk) && <div className="tiny">A week from now, six new questions on it check that it's stuck.</div>}
-      {items.some((it) => it.firstMark === "wrong") && (
+      {!offers.length && !rem.teach && !rem.walk && items.some((it) => it.firstMark === "wrong") && (
         <button className="btn small outline" style={{ alignSelf: "flex-start" }} onClick={async () => { await finish(false); go(`/tutor?ctx=${encodeURIComponent(`review:${s.id}`)}`); }}>Go through these with the tutor</button>
       )}
       <div className="spacer" />

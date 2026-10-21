@@ -29,7 +29,7 @@ export function lifeRange(kind: LifeKind, today: string, startingOn?: string): {
 export function lifeMessage(kind: LifeKind, moved: number, startingOn?: string): string {
   if (kind === "tonight") return moved ? `Tonight's clear. ${moved === 1 ? "One chip that doesn't fit the rest of the week moved" : `${moved} chips that don't fit the rest of the week moved`} to next week.` : "Tonight's clear. The rest of the week holds everything.";
   if (kind === "weekend") return "Weekend's clear.";
-  return `${startingOn ? "That" : "This"} week is a bus week: 4–5 hours of reading, videos and cards. It still counts as a week done.`;
+  return `${startingOn ? "That" : "This"} week is a bus week: 4–5 hours of reading, videos and cards. It counts as a week done.`;
 }
 
 // ---------------------------------------------------------------- the date check
@@ -54,7 +54,7 @@ export function dateCheck(projected: string | null, target: string | null, extra
 }
 
 /** What "keep the date" adds, as slots: one more morning, or Sunday 10:00–12:00. Never past 15 hours. */
-export function keepDatePlan(s: Settings, extraPerWeek: number): { words: string; patch: Partial<Settings> } | null {
+export function keepDatePlan(s: Settings, extraPerWeek: number, rawWeekMinutes = 0): { words: string; patch: Partial<Settings> } | null {
   const morning = 45;
   const mornings = { ...s.mornings, days: [...s.mornings.days] };
   let added = 0;
@@ -78,6 +78,7 @@ export function keepDatePlan(s: Settings, extraPerWeek: number): { words: string
     }
   }
   if (added < extraPerWeek) return null;
+  if (rawWeekMinutes && !withinCap(rawWeekMinutes, added)) return null;     // the app never asks for more than 15 hours
   return { words, patch };
 }
 

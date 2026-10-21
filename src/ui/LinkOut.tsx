@@ -12,6 +12,7 @@ export function LinkOut({ url, label, fallback, color, small = true, onOpen, com
 }) {
   const leftAt = useRef<number | null>(null);
   const [ask, setAsk] = useState(false);
+  const [opened, setOpened] = useState(false);
 
   useEffect(() => {
     const back = () => {
@@ -24,7 +25,7 @@ export function LinkOut({ url, label, fallback, color, small = true, onOpen, com
     return () => { document.removeEventListener("visibilitychange", back); window.removeEventListener("focus", back); };
   }, []);
 
-  const open = () => { leftAt.current = Date.now(); setAsk(false); onOpen?.(); openOut(url); };
+  const open = () => { leftAt.current = Date.now(); setAsk(false); setOpened(true); onOpen?.(); openOut(url); };
   const dead = async (why: string) => {
     setAsk(false);
     await record({ type: "link.dead", url, why });
@@ -36,7 +37,7 @@ export function LinkOut({ url, label, fallback, color, small = true, onOpen, com
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       <div className={compact ? undefined : "row"} style={compact ? { display: "flex", flexDirection: "column", gap: 2 } : { gap: 6 }}>
         <button className={`btn outline${small ? " small" : ""}`} style={{ fontSize: 15, height: 48, borderColor: color?.c, color: color?.d, whiteSpace: "nowrap" }} onClick={open}>{label} ↗</button>
-        <button className="back" style={{ padding: compact ? "2px 0" : "6px 4px", fontSize: compact ? 10 : undefined, alignSelf: compact ? "center" : undefined }} title="Use the backup instead" onClick={() => void dead("didn't load")}>Didn't load</button>
+        {opened && <button className="back" style={{ padding: compact ? "2px 0" : "6px 4px", fontSize: compact ? 10 : undefined, alignSelf: compact ? "center" : undefined }} title="Use the backup instead" onClick={() => void dead("didn't load")}>Didn't load</button>}
       </div>
       {ask && (
         <div className="note" role="dialog">

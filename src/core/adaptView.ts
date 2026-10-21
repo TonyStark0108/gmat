@@ -28,7 +28,7 @@ export interface AdaptView {
   carelessLeads: boolean;
   extraChip: (ws: string) => ExtraSpec | null;
   leanChip: (ws: string, cap: WeekCapacity) => ExtraSpec | null;
-  keepSharp: (ws: string) => ExtraSpec | null;
+  keepSharp: (ws: string, always?: boolean) => ExtraSpec | null;
   topupSpec: (o: TopupOffer, ws: string) => ExtraSpec | null;
   topupLine: (o: TopupOffer) => string;
   history: (ws: string) => ReturnType<typeof topupHistory>;
@@ -108,8 +108,8 @@ export function buildAdapt(content: Content, reviews: ReviewModel, d: Derived, b
       const topic = weakTopicIn(weakest) ?? (weakest === "di" ? "graphs & tables" : "word problems");
       return listSpec(`lean:${ws}`, "lean", ws, topic, weakest, `More ${SEC_NAME[weakest]} · ${topicName(topic).toLowerCase()}`, minutes, 10, reason);
     },
-    keepSharp: (ws) => {
-      if (weekNumber(ws, d.settings.startDate) % 2) return null;      // every two weeks
+    keepSharp: (ws, always = false) => {
+      if (!always && weekNumber(ws, d.settings.startDate) % 2) return null;      // every two weeks
       const timed = [...content.plan.tasks].reverse().find((t) => t.kind === "gmatclub_set" && t.timed && t.section === "quant" && t.pointer.lists_pool?.length);
       if (!timed) return null;
       const urls = timed.pointer.lists_pool!.slice(0, 4).map((l) => ({ label: `${l.topic ?? "mixed"}`, url: l.url }));

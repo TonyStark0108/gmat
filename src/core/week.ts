@@ -5,7 +5,7 @@
 // Both streams follow plan order. Desk time sets the pace: rides never take plan work from a plan
 // week the desk hasn't reached, so a quiet week of rides can't pull next week's plan forward.
 
-import { addDays, isLightWeek, parseYmd, weekCapacity, ymd, type WeekCapacity } from "./calendar";
+import { addDays, dayCapacity, isLightWeek, parseYmd, weekCapacity, ymd, type WeekCapacity } from "./calendar";
 import { load, type Piece } from "./pieces";
 import { WEEK_CAP_MIN, type Settings } from "./settings";
 
@@ -84,7 +84,12 @@ export function buildWeek(a: BuildArgs): WeekPlan {
   const hasMock = chips.some((c) => a.pieces.find((p) => p.id === c.pieceId)?.task.kind === "mock");
   let mockDay: string | null = null;
   if (hasMock) {
-    for (let i = 0; i < 7; i++) {
+    // the first block day with desk time (not a pause or an "off" day); the first block day otherwise
+    for (let i = 0; i < 7 && !mockDay; i++) {
+      const d = addDays(parseYmd(a.weekStart), i);
+      if (a.settings.saturday.days.includes(d.getDay()) && dayCapacity(ymd(d), a.settings).desk > 0) mockDay = ymd(d);
+    }
+    for (let i = 0; i < 7 && !mockDay; i++) {
       const d = addDays(parseYmd(a.weekStart), i);
       if (a.settings.saturday.days.includes(d.getDay())) mockDay = ymd(d);
     }

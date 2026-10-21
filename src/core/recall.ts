@@ -234,7 +234,7 @@ const SEC: Record<string, string> = { quant: "Quant", di: "DI", rc: "Reading", c
 
 export function recallGroups(reviews: ReviewModel, d: Derived, today: string, f: { online: boolean; bus: boolean }, max = 5): RecallGroup[] {
   const busy = new Set<string>();
-  for (const [id, r] of d.reviewStarted) if (!d.reviewDone.has(id)) r.items.forEach((x) => busy.add(x));
+  for (const [id, r] of d.reviewStarted) if (!d.reviewDone.has(id) && d.reviewTouched.has(id)) r.items.forEach((x) => busy.add(x));
   const groups = new Map<string, Item[]>();
   for (const it of reviews.items.values()) {
     const live = it.entered && it.firstMark !== "unknown" && (it.state === "review" || LIVE.has(it.state));
@@ -287,7 +287,7 @@ export function recallSpecs(m: Model): ExtraSpec[] {
     const day = d.mockMoved.get(p.id) ?? m.week?.mockDay;
     if (!day || today > day || daysBetween(today, day) > SWEEP_DAYS_BEFORE || !groups.length) continue;
     out.push({ id: `sweep:${p.id}`, kind: "recall", week: ws, section: "general", topic: null, title: "Before the mock: your error log, from memory", minutes: 30,
-      open: { type: "recall", sweep: p.id, bus: busOnly(groups) }, reason: "Every group of mistakes still open: your rule, your notes, a question or two each." });
+      open: { type: "recall", sweep: p.id, bus: busOnly(groups) }, reason: "Every open group of mistakes: your rule, your notes, a question or two each." });
   }
   // the week's recap, from Saturday
   if (today >= plusDays(ws, RECAP_FROM_DAY)) {

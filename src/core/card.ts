@@ -86,6 +86,21 @@ function ready(p: Piece, c: CardCtx): boolean {
   return p.task.depends_on.every((t) => taskDone(t, c));
 }
 
+/**
+ * Has any work gone in? A set you only opened isn't "waiting where you left it". Work that happens on
+ * another site (GMAT Club, mba.com) starts when you open it, so it counts as started.
+ */
+function hasProgress(p: Piece, c: CardCtx): boolean {
+  const k = p.task.kind;
+  if (k === "og_set") return (c.d.answers.get(p.id)?.size ?? 0) > 0;
+  if (k === "rc_section") return c.d.rcPlace.has(p.id) || (c.d.answers.get(p.id)?.size ?? 0) > 0;
+  if (k === "drill") return c.d.drills.has(p.id);
+  if (k === "video" || (k === "test_prep" && p.task.pointer.youtube_id)) return (c.d.video.get(p.id)?.seconds ?? 0) >= 30;
+  if (k === "recall") return [...c.d.seen.keys()].some((x) => x.startsWith(`recall-group:${p.id}:`));
+  if (k === "cards") return false;
+  return true;
+}
+
 function progressOf(p: Piece, c: CardCtx) {
   const total = p.count ?? 0;
   const place = c.d.rcPlace.get(p.id);
@@ -121,7 +136,7 @@ export function chooseCard(c: CardCtx): Card {
 
   // 1. Anything unfinished: a set you were in the middle of, or a review you didn't complete.
   const open = [...c.d.started.entries()]
-    .filter(([id]) => !c.d.done.has(id) && c.byId.has(id))
+    .filter(([id]) => !c.d.done.has(id) && c.byId.has(id) && !skipped.has(id) && hasProgress(c.byId.get(id)!, c))
     .sort((a, b) => b[1] - a[1])
     .map(([id]) => c.byId.get(id)!)
     .find(fit);
@@ -141,6 +156,12 @@ export function chooseCard(c: CardCtx): Card {
   if (!c.bus) {
     const mock = todo.find((p) => p.task.kind === "mock" && ready(p, c) && (c.d.mockMoved.get(p.id) ?? c.week?.mockDay ?? "9999") <= c.today);
     if (mock && slot?.kind !== "morning" && (c.online || mock.offlineOk)) return { kind: "mock", piece: mock };
+    if (phase === "taper" && slot?.kind !== "morning" && c.online) {
+      const blockDay = c.settings.saturday.enabled && c.settings.saturday.days.includes(c.now.getDay());
+      const last = c.pieces.find((p) => p.task.kind === "mock" && p.task.pointer.type === "official_mock" && !c.d.done.has(p.id) && !c.letGo?.has(p.taskId)
+        && (c.d.mockMoved.get(p.id) ? c.d.mockMoved.get(p.id)! <= c.today : blockDay));
+      if (last) return { kind: "mock", piece: last };
+    }
   }
 
   // 3. Redos that are due: set reviews, mixed returns and second tries, drill repeats, passages.
@@ -159,7 +180,8 @@ export function chooseCard(c: CardCtx): Card {
   const redo = extras.find((x) => (x.xkind === "drill" || x.xkind === "passage") && !skipped.has(x.id) && fit(x) && x.availableFrom <= c.today);
   if (redo) return { kind: "redo", piece: redo };
   // your error log, from memory (the week's, or the sweep before a mock): review work, so it comes before new work
-  const recall = extras.find((x) => x.xkind === "recall" && !skipped.has(x.id) && fit(x));
+  const sweepOver = (x: ExtraPiece) => { const o = x.spec?.open; return o?.type === "recall" && !!o.sweep && c.d.done.has(o.sweep); };
+  const recall = extras.find((x) => x.xkind === "recall" && !skipped.has(x.id) && !sweepOver(x) && fit(x));
   if (recall) return { kind: "task", piece: recall, next: null };
 
   // 4. Today's mix from this week's chips, and top-ups and help chips by their section.
