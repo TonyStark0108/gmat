@@ -33,6 +33,14 @@ export interface Settings {
   life: LifeBlock[];
   /** Rebuild weeks: that week, the section's new plan work waits while its basics come back. */
   rebuild: { week: string; section: Section }[];
+  /** The total you're aiming for. Every threshold (Ready, mock verdicts, the progress line) follows it. */
+  target: number;
+  /** Official Practice Exams 3–6: they take the plan's weeks 9, 10, 12 and 13 test slots unless not bought. */
+  exams36: "bought" | "not bought";
+  /** The week-1 practice run: Official Exam 1 (which then isn't fresh in week 8) or a non-official timed test. */
+  practiceRunKind: "official" | "unofficial";
+  /** Harder GMAT Club lists you paste in, per quant topic: 655–705 and 705+. Used from plan week 8. */
+  hardLists: Record<string, { mid?: string; top?: string }>;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -57,9 +65,14 @@ export const DEFAULT_SETTINGS: Settings = {
   fitMode: false,
   life: [],
   rebuild: [],
+  target: 685,
+  exams36: "bought",
+  practiceRunKind: "unofficial",
+  hardLists: {},
 };
 
 export const PLAN_SHARE = 0.85;          // the free 15% (spec: The week)
 export const WEEK_CAP_MIN = 15 * 60;     // never more than 15 hours a week
 export const LIGHT_WEEK_BUS_MIN = 270;   // a light bus week: 4–5 hours of reading, videos and cards
-export const TARGET = 665;               // the score the plan aims at
+export const DEFAULT_TARGET = 685;       // the default; your own target is a setting
+export const READY_MARGIN = 10;          // Ready: the last two fresh official mocks within 10 of the target, and rising

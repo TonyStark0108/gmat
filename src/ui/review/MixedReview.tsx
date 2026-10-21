@@ -27,8 +27,8 @@ export function MixedReviewScreen({ id }: { id: string }) {
   const cur = items.find((it) => !answered(it) || !closedHere(it, id, d));
   if (!cur) return <Finished id={id} items={items} onLeave={() => time.flush()} />;
   return (
-    <Screen>
-      <div className="column">
+    <Screen wide={cur.source === "rc"}>
+      <div className="column" style={cur.source === "rc" ? { maxWidth: "none" } : undefined}>
         <Back label="← Today · pause" onClick={() => { time.flush(); go("/"); }} />
         <div className="eyebrow">Mixed review · {items.indexOf(cur) + 1} of {items.length}</div>
         <One key={cur.id} it={cur} review={id} />
@@ -43,7 +43,7 @@ function closedHere(it: Item, review: string, d: ReturnType<typeof useApp>["d"])
 }
 
 function One({ it, review }: { it: Item; review: string }) {
-  const { d, m } = useApp();
+  const { d, m, content } = useApp();
   const k = SUBJECT[it.section];
   const [pick, setPick] = useState<Answer>(null);
   const [needKey, setNeedKey] = useState(false);
@@ -54,12 +54,11 @@ function One({ it, review }: { it: Item; review: string }) {
   useEffect(() => { setPick(null); setNeedKey(false); }, [it.id]);
 
   const answer = async (value: Answer, right?: boolean) => {
-    if (it.key === undefined && it.source !== "share" && right === undefined) { setPick(value); setNeedKey(true); return; }
+    if (it.key === undefined && it.source !== "share" && it.source !== "log" && right === undefined) { setPick(value); setNeedKey(true); return; }
     await record({ type: "review.answer", review, item: it.id, attempt: "mixed", value, right });
   };
   const next = async () => {
-    const st = m.reviews.items.get(it.id)!.state;
-    if (wasRight === false && st !== "movedon" && !tag) return;
+    if (wasRight === false && !tag) return;
     if (wasRight === false && tag) {
       await record({ type: "review.tag", item: it.id, tag, line: line.trim() || undefined });
       if (line.trim()) await record({ type: "line", source: `review:${it.id}`, text: line.trim(), front: errorFront(it.section, it.topic, tag), topic: it.topic, section: it.section });
@@ -82,28 +81,46 @@ function One({ it, review }: { it: Item; review: string }) {
           now.state === "retired"
             ? <div className="title" style={{ fontSize: 28 }}>{m.reviews.retired} retired. {topicName(it.topic)}, the one from {shortDate(it.setDay)}. Right twice, a week or more apart.</div>
             : <div className="title" style={{ fontSize: 28 }}>Right.</div>
-        ) : now.state === "movedon" ? (
-          <div className="title" style={{ fontSize: 28 }}>This one's had three goes. Leaving it.</div>
         ) : (
           <>
-            <div className="title" style={{ fontSize: 28 }}>Here it is: {showAnswer(now.key)}.</div>
+            {now.state === "stubborn" && <div style={{ fontSize: 18 }}>Three goes now. It joins the stubborn ones and comes back in ten days, in its own short session.</div>}
+            <div className="title" style={{ fontSize: 28 }}>{now.key !== undefined ? <>Here it is: {showAnswer(now.key)}.</> : "Check the source's answer and explanation."}</div>
             {it.explanation && <div className="tiny">Where it's explained: {it.explanation}.</div>}
             <button className="back" style={{ color: "var(--link)" }} onClick={() => go(`/tutor?ctx=${encodeURIComponent(`item:${it.id}`)}`)}>Ask the tutor about this one</button>
             <TagPick it={it} value={tag} line={line} onTag={setTag} onLine={setLine} />
           </>
         )}
-        <button className="btn" disabled={wasRight === false && now.state !== "movedon" && !tag} onClick={() => void next()}>Next</button>
+        <button className="btn" disabled={wasRight === false && !tag} onClick={() => void next()}>Next</button>
+      </div>
+    );
+  }
+
+  // a single reading question comes back with its passage, in the reader's plain font
+  const passage = it.source === "rc" ? content?.rc_bank.sections.flatMap((x) => x.passages).find((p) => p.id === it.passageId) : null;
+  const rcq = passage?.questions.find((q) => q.id === it.q);
+  if (passage && rcq) {
+    return (
+      <div className="split" style={{ minHeight: 420 }}>
+        <div className="left reading">{passage.paragraphs.map((p, i) => <p key={i}>{p}</p>)}</div>
+        <div className="right">
+          <div className="eyebrow" style={{ color: k.d }}>Reading · one question again</div>
+          <div className="qtext">{rcq.stem}</div>
+          {Object.entries(rcq.choices).map(([L, text]) => (
+            <button key={L} className={`choice${pick === L ? " on" : ""}`} onClick={() => setPick(L)}><span className="l">{L}</span><span>{text}</span></button>
+          ))}
+          <button className="btn" style={{ background: k.c, borderColor: k.c }} disabled={pick === null} onClick={() => void answer(pick)}>Check it</button>
+        </div>
       </div>
     );
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div className="eyebrow" style={{ color: k.d }}>{k.name}</div>
-      {it.source === "book" && <div className="ptr" style={{ background: k.t, fontSize: 14 }}>{it.label}</div>}
-      {(it.source === "cr" || it.source === "share") && <LinkOut url={it.url!} label={it.source === "cr" ? `Open CR question ${it.n}` : "Open the question"} color={{ c: k.c, d: k.d }} />}
+      <div className="eyebrow" style={{ color: k.d }}>{k.name}{it.state === "stubborn" ? " · a stubborn one" : ""}</div>
+      {(it.source === "book" || it.source === "log" || (it.source === "share" && !it.url)) && <div className="ptr" style={{ background: k.t, fontSize: 14 }}>{it.label}</div>}
+      {(it.source === "cr" || ((it.source === "share" || it.source === "log") && it.url)) && <LinkOut url={it.url!} label={it.source === "cr" ? `Open CR question ${it.n}` : "Open the question"} color={{ c: k.c, d: k.d }} />}
       <div className="muted" style={{ fontSize: 16 }}>From scratch, as if you'd never seen it.</div>
-      {it.source === "share" ? (
+      {it.source === "share" || it.source === "log" ? (
         <div className="row">
           <button className="btn" style={{ flex: 1 }} onClick={() => void answer(null, true)}>Got it right</button>
           <button className="btn ghost" onClick={() => void answer(null, false)}>Wrong again</button>

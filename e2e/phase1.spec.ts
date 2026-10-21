@@ -112,6 +112,12 @@ test("the Phase 1 checklist, end to end", async () => {
   for (const a of ["1b", "2cs", "d", "4a", "5e", "6c"]) await typeAnswer(page, a);
   await expect(page.getByText("6 of 12 entered")).toBeVisible();
   await snap(page, "Typed: 1b, 2cs (not sure), then letters on their own for the next ones. Six answers in.");
+  // audit E19: the grid fits a 390-pixel phone
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await snap(page, "The same grid on a 390-pixel phone: one column, nothing off the edge.");
+  await page.setViewportSize({ width: 1366, height: 768 });
 
   setStep("4b · The browser closes halfway through the set");
   await reopen(at("2026-12-05T10:31"), true);

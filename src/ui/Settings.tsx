@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { spentThisMonth } from "../core/tutor/cost";
+import { QUANT_TOPICS } from "../core/topics";
 import { saveTutorCap, saveTutorEffort, saveTutorKey, tutorPrefs, type TutorPrefs } from "../data/tutorPrefs";
 import { go } from "../app/router";
 import { useApp } from "../app/store";
@@ -22,11 +23,11 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 /** The finish date worked out from both budgets, and what a date of your own would take. */
 export function useFinish() {
-  const { pieces, d, today } = useApp();
+  const { pieces, d, today, m } = useApp();
   const s = d.settings;
   return useMemo(() => {
     const from = today > s.startDate ? today : s.startDate;
-    const args = { pieces, done: d.done, settings: s, fromWeek: weekStartOf(from), fromDay: from };
+    const args = { pieces, done: d.done, settings: s, fromWeek: weekStartOf(from), fromDay: from, busMinutes: m.ride };
     const auto = projectFinish(args).finish;
     let need: string | null = null;
     if (s.finishDate && auto && s.finishDate < auto) {
@@ -37,7 +38,7 @@ export function useFinish() {
             : `About ${Math.round(x.extraPerWeek / 60 * 10) / 10} more desk hours a week.`;
     }
     return { auto, need };
-  }, [pieces, d.done, s, today]);
+  }, [pieces, d.done, s, today, m.ride]);
 }
 
 export function DateFields({ showMore }: { showMore?: boolean }) {
@@ -55,6 +56,11 @@ export function DateFields({ showMore }: { showMore?: boolean }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
+      <Field label="Target score">
+        <select value={s.target} onChange={(e) => void setSetting({ target: Number(e.target.value) })}>
+          {[605, 625, 645, 655, 665, 675, 685, 695, 705, 725, 745].map((n) => <option key={n} value={n}>{n}</option>)}
+        </select>
+      </Field>
       <Field label="Start"><input type="date" value={s.startDate} onChange={(e) => e.target.value && void setSetting({ startDate: e.target.value })} /></Field>
       <Field label="Saturday block">
         <button className="toggle" onClick={() => void setSetting({ saturday: { ...s.saturday, enabled: !s.saturday.enabled } })}>{s.saturday.enabled ? "on" : "off"}</button>
@@ -81,7 +87,7 @@ export function DateFields({ showMore }: { showMore?: boolean }) {
         {s.finishDate && <button className="tiny back" onClick={() => void setSetting({ finishDate: null })}>work it out</button>}
       </Field>
       {need && <div className="small" style={{ padding: "6px 0" }}>To finish by {longDate(s.finishDate!)}: {need}</div>}
-      {!s.finishDate && auto && <div className="tiny" style={{ padding: "6px 0" }}>Worked out from your desk and bus time. Change the date and it shows what it takes.</div>}
+      {auto && <div className="small" style={{ padding: "6px 0" }}>Projected with your slots and rides as they are: <b>{longDate(auto)}</b>.{s.finishDate ? "" : " Change the date and it shows what it takes."}</div>}
       {more && <>
         <PauseFields />
         <Field label="Book-by"><input type="date" value={s.bookBy} onChange={(e) => void setSetting({ bookBy: e.target.value })} /></Field>
@@ -89,6 +95,22 @@ export function DateFields({ showMore }: { showMore?: boolean }) {
         <Field label="Bus time counts"><button className="toggle" onClick={() => void setSetting({ busCounts: !s.busCounts })}>{s.busCounts ? "on" : "off"}</button></Field>
         <Field label="Verbal Review sets on the bus"><button className="toggle" onClick={() => void setSetting({ verbalReviewOnBus: !s.verbalReviewOnBus })}>{s.verbalReviewOnBus ? "on" : "off"}</button></Field>
         <Field label="Practice-run mock in week 1"><button className="toggle" onClick={() => void setSetting({ practiceRun: !s.practiceRun })}>{s.practiceRun ? "on" : "off"}</button></Field>
+        {s.practiceRun && (
+          <div className="note" style={{ margin: "6px 0" }}>
+            <div style={{ fontSize: 16 }}>{s.practiceRunKind === "official"
+              ? "This uses Official Practice Exam 1. Its week-8 sitting would then be a retake: it won't count as fresh, so it can't show you're Ready."
+              : "A non-official timed test (GMAT Club sections). Official Exam 1 stays fresh for week 8."}</div>
+            <div className="row wrap">
+              <button className="btn small outline" onClick={() => void setSetting({ practiceRunKind: "unofficial" })} disabled={s.practiceRunKind !== "official"}>Use a non-official test</button>
+              <button className="btn small ghost" onClick={() => void setSetting({ practiceRunKind: "official" })} disabled={s.practiceRunKind === "official"}>Use Official Exam 1 anyway</button>
+            </div>
+          </div>
+        )}
+        <Field label="Official Practice Exams 3–6">
+          <select value={s.exams36} onChange={(e) => void setSetting({ exams36: e.target.value as "bought" | "not bought" })}>
+            <option value="bought">bought: in weeks 9, 10, 12, 13</option><option value="not bought">not bought: timed GMAT Club sections</option>
+          </select>
+        </Field>
         <Field label="Book edition">
           <select value={s.bookEdition} onChange={(e) => void setSetting({ bookEdition: e.target.value })}>
             <option>2025–2026</option><option>2024–2025</option>
@@ -131,15 +153,15 @@ export function BackupNote() {
   const { d, now: t } = useApp();
   const [busy, setBusy] = useState(false);
   const week = 7 * 86_400_000;
-  const due = !d.lastBackup || t.getTime() - d.lastBackup > 6 * 86_400_000;
+  const due = !d.lastBackup || t.getTime() - d.lastBackup > 30 * 3_600_000;
   const sundayish = t.getDay() === 0 || t.getDay() === 1;
-  const needOffsite = d.lastBackup && (!d.offsiteAt || d.offsiteAt < d.lastBackup) && t.getTime() - d.lastBackup < week;
+  const needOffsite = sundayish && d.lastBackup && (!d.offsiteAt || t.getTime() - d.offsiteAt > 6 * 86_400_000) && t.getTime() - d.lastBackup < week;
   if (!d.setupDone) return null;
-  if (due && sundayish) {
+  if (due) {
     return (
       <div className="note">
-        <div className="eyebrow">This week's backup</div>
-        <div style={{ fontSize: 18 }}>One file of everything, saved on this laptop.</div>
+        <div className="eyebrow">Today's backup</div>
+        <div style={{ fontSize: 18 }}>The automatic backup needs your OK again (the browser asks for the folder from time to time). One tap.</div>
         <button className="btn small outline" disabled={busy} onClick={async () => { setBusy(true); await backupNow(true); setBusy(false); }}>Back up now</button>
       </div>
     );
@@ -187,6 +209,8 @@ export function SettingsScreen() {
 
         <div className="eyebrow" style={{ marginTop: 10 }}>Cards</div>
         <button className="btn small ghost" style={{ alignSelf: "flex-start" }} onClick={() => go("/cards/manage")}>Your cards: edit, pause or delete</button>
+        <div className="eyebrow" style={{ marginTop: 10 }}>Harder GMAT Club lists (from plan week 8)</div>
+        <HardLists />
         <div className="eyebrow" style={{ marginTop: 10 }}>Your tutor</div>
         <TutorSettings say={say} />
         <div className="eyebrow" style={{ marginTop: 10 }}>Send to GMAT app</div>
@@ -226,6 +250,34 @@ export function SettingsScreen() {
 }
 
 export const shortDay = (day: string) => DAY_NAMES[parseYmd(day).getDay()];
+
+/** B8: paste the 655–705 and 705+ list links per quant topic (the app never makes up a link). */
+function HardLists() {
+  const { d } = useApp();
+  const [open, setOpen] = useState(false);
+  const lists = d.settings.hardLists ?? {};
+  const filled = Object.values(lists).filter((x) => x.mid || x.top).length;
+  const put = (topic: string, which: "mid" | "top", url: string) => {
+    const v = url.trim();
+    if (v && !/^https:\/\/(www\.)?gmatclub\.com\//i.test(v)) return;
+    void setSetting({ hardLists: { ...lists, [topic]: { ...lists[topic], [which]: v || undefined } } });
+  };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div className="small">{filled ? `${filled} topics have harder lists.` : "None yet."} Paste a GMAT Club search link (PS and DS) for each level; extra practice uses them from plan week 8, and the hardest level once you're past 80% on a topic twice.</div>
+      <button className="back" style={{ color: "var(--link)" }} onClick={() => setOpen((x) => !x)}>{open ? "Hide the topics" : "Add or change links"}</button>
+      {open && QUANT_TOPICS.map((t) => (
+        <div key={t} className="field" style={{ flexWrap: "wrap" }}>
+          <span>{t}</span>
+          <div className="row" style={{ gap: 6 }}>
+            <input aria-label={`${t} 655–705`} placeholder="655–705 link" defaultValue={lists[t]?.mid ?? ""} onBlur={(e) => put(t, "mid", e.target.value)} style={{ width: 180 }} />
+            <input aria-label={`${t} 705+`} placeholder="705+ link" defaultValue={lists[t]?.top ?? ""} onBlur={(e) => put(t, "top", e.target.value)} style={{ width: 180 }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /** The tutor's key (this browser only), a monthly cap, and how hard it thinks. */
 function TutorSettings({ say }: { say: (m: string) => void }) {

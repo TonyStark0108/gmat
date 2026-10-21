@@ -9,7 +9,7 @@ import type { Tag } from "./events";
 import type { Piece } from "./pieces";
 import type { Item, ReviewModel } from "./review";
 import type { Derived } from "./state";
-import { listTopic } from "./topics";
+import { DI_TYPE_OF, listTopic } from "./topics";
 
 export const ADAPT_MIN_ATTEMPTS = 15;
 export const RECENT = 20;
@@ -49,19 +49,25 @@ export function topicStats(reviews: ReviewModel, d: Derived, pieces: Map<string,
   // GMAT Club sets give counts by topic (no single questions)
   for (const [pid, o] of d.outside) {
     const p = pieces.get(pid);
-    const topic = p?.task.topic;
-    if (!p || !topic || o.right === undefined) continue;
+    if (!p) continue;
     const day = d.doneAt.get(pid)?.day ?? today;
-    for (let i = 0; i < (o.right ?? 0); i++) add(listTopic(topic), p.section, day, true, pid);
-    for (let i = 0; i < (o.wrong ?? 0) + (o.unsure ?? 0); i++) add(listTopic(topic), p.section, day, false, pid);
+    const count = (topic: string, c: { right?: number; wrong?: number; unsure?: number }) => {
+      for (let i = 0; i < (c.right ?? 0); i++) add(topic, p.section, day, true, pid);
+      for (let i = 0; i < (c.wrong ?? 0) + (c.unsure ?? 0); i++) add(topic, p.section, day, false, pid);
+    };
+    if (o.byType) { for (const [t, c] of Object.entries(o.byType)) count(DI_TYPE_OF[t] ?? t, c); continue; }
+    const types = p.task.pointer.types as string[] | undefined;
+    const topic = p.task.topic ? listTopic(p.task.topic) : types?.length === 1 ? DI_TYPE_OF[types[0]] : null;
+    if (!topic || o.right === undefined) continue;
+    count(topic, o);
   }
   const out = new Map<string, TopicStat>();
   for (const [topic, fs] of firsts) {
     fs.sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0));
-    const its = [...reviews.items.values()].filter((it) => it.topic === topic && it.entered && it.source !== "rc");
+    const its = [...reviews.items.values()].filter((it) => it.topic === topic && it.entered);
     const redo = its.filter((it) => it.attempts > 0);
     const redoRight = redo.filter((it) => it.state === "return" || it.state === "retired");
-    const live = its.filter((it) => it.state === "review" || it.state === "redo" || it.state === "return");
+    const live = its.filter((it) => it.state === "review" || it.state === "redo" || it.state === "return" || it.state === "stubborn");
     const tags: TopicStat["tags"] = {};
     for (const it of its) if (it.tag) tags[it.tag] = (tags[it.tag] ?? 0) + 1;
     const bySet = new Map<string, { day: string; r: number; n: number }>();
@@ -189,7 +195,7 @@ export function topupOffers(setItems: Item[], reviews: ReviewModel, hist: Return
     if (hist.resting.has(topic)) continue;
     const wrong = its.filter((it) => it.firstMark === "wrong").length;
     const rough = its.length >= 3 && wrong / its.length > 0.4;
-    const live = [...reviews.items.values()].filter((it) => it.topic === topic && (it.state === "redo" || it.state === "return" || it.state === "review")).length;
+    const live = [...reviews.items.values()].filter((it) => it.topic === topic && (it.state === "redo" || it.state === "return" || it.state === "review" || it.state === "stubborn")).length;
     if (!rough && live < 4) continue;
     const tags = its.map((it) => it.tag).filter(Boolean) as Tag[];
     const slips = tags.filter(isSlip).length;

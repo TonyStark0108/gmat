@@ -73,6 +73,7 @@ export interface Derived {
   offers: Map<string, Of<"offer">["answer"]>;
   offersAt: Map<string, number>;
   shared: Of<"shared">[];
+  qlogs: Of<"qlog">[];
   deadLinks: Map<string, { why: string; ts: number }>;
   crSwaps: Of<"cr.swap">[];
   videoChecks: Map<string, { status: number; ts: number }>;
@@ -81,6 +82,7 @@ export interface Derived {
   booking: Of<"booking">[];
   testResult: { score: number | null; ts: number } | null;
   seen: Map<string, number>;
+  restoredAt: number | null;
   tutorNotes: { text: string; ts: number; day: string }[];
   tutorSpend: Map<string, number>;       // "2026-12" -> US dollars
   eventCount: number;
@@ -100,9 +102,9 @@ export function derive(events: AppEvent[], sectionOf: (pieceId: string) => Secti
     keysEntered: new Map(), keyOverrides: new Map(), bookChecks: [],
     introduced: new Map(), introWeeks: new Set(), cardRatings: new Map(), cardFront: new Map(), cardPaused: new Set(),
     cardDeleted: new Set(), cardSessions: [],
-    datechecks: [], letgo: new Map(), extras: new Map(), offers: new Map(), offersAt: new Map(), shared: [], deadLinks: new Map(),
+    datechecks: [], letgo: new Map(), extras: new Map(), offers: new Map(), offersAt: new Map(), shared: [], qlogs: [], deadLinks: new Map(),
     crSwaps: [], videoChecks: new Map(), mockMoved: new Map(), mockMisses: new Map(), booking: [], testResult: null,
-    seen: new Map(), tutorNotes: [], tutorSpend: new Map(), eventCount: events.length,
+    seen: new Map(), restoredAt: null, tutorNotes: [], tutorSpend: new Map(), eventCount: events.length,
   };
   const life: LifeBlock[] = [];
   const seen = (piece: string, day: string) => {
@@ -171,9 +173,9 @@ export function derive(events: AppEvent[], sectionOf: (pieceId: string) => Secti
       case "level": d.level = Math.max(d.level, e.level); break;
       case "backup": d.lastBackup = e.ts; break;
       case "backup.offsite": d.offsiteAt = e.ts; break;
-      // A restore brings in another device's history: week plans are working copies, so they're
-      // rebuilt from the restored answers rather than kept from either device.
-      case "restored": d.weeks.clear(); break;
+      // A restore brings in another device's history. Week plans are kept (never wiped); the current
+      // week is rebuilt around the merged answers, keeping what's done (weekly.ts).
+      case "restored": d.restoredAt = e.ts; break;
       case "admin": d.admin.set(e.piece, e); break;
       // ---- review
       case "review.started": if (!d.reviewStarted.has(e.review)) d.reviewStarted.set(e.review, { items: e.items, ts: e.ts, day: e.day }); break;
@@ -211,6 +213,7 @@ export function derive(events: AppEvent[], sectionOf: (pieceId: string) => Secti
       case "extra.added": if (!d.extras.has(e.extra.id)) d.extras.set(e.extra.id, { ...e.extra, addedTs: e.ts, addedDay: e.day }); break;
       case "offer": d.offers.set(e.offer, e.answer); d.offersAt.set(e.offer, e.ts); break;
       case "shared": d.shared.push(e); break;
+      case "qlog": d.qlogs.push(e); break;
       case "link.dead": d.deadLinks.set(e.url, { why: e.why, ts: e.ts }); break;
       case "cr.swap": d.crSwaps.push(e); break;
       case "video.check": d.videoChecks.set(e.youtubeId, { status: e.status, ts: e.ts }); break;

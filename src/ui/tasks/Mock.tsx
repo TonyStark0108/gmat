@@ -6,7 +6,7 @@ import { go } from "../../app/router";
 import { useApp } from "../../app/store";
 import { longDate, plusDays, weekStartOf } from "../../core/calendar";
 import type { MockMiss, Tag } from "../../core/events";
-import { moveMockDay, rehearsal } from "../../core/mocks";
+import { moveMockDay, rehearsal, scoreProblem } from "../../core/mocks";
 import type { Piece } from "../../core/pieces";
 import { mockVerdict } from "../../core/results";
 import { QUANT_TOPICS } from "../../core/topics";
@@ -33,7 +33,9 @@ export function MockTask({ piece, onDone }: { piece: Piece; onDone: (l: Logged |
   const lastMock = m.mocks[m.mocks.length - 1]?.day ?? null;
   const noteboard = d.admin.get("w06-general-01#0")?.answer === "done" || piece.planWeek >= 6;
 
+  const problem = scoreProblem(scores, !!ptr.practice_run);
   const save = async () => {
+    if (problem) return;
     const n = Object.fromEntries(Object.entries(scores).filter(([, v]) => v).map(([kk, v]) => [kk, Number(v)]));
     await record({ type: "outside", piece: piece.id, scores: n });
     await record({ type: "time", minutes: 135, where: "desk", piece: piece.id, source: "mock" });
@@ -69,10 +71,11 @@ export function MockTask({ piece, onDone }: { piece: Piece; onDone: (l: Logged |
             <div className="field" key={key}><span>{key === "di" ? "Data Insights" : key[0].toUpperCase() + key.slice(1)}</span>
               <input inputMode="numeric" aria-label={key} value={scores[key]} onChange={(e) => setScores((s) => ({ ...s, [key]: e.target.value.replace(/\D/g, "") }))} style={{ width: 80 }} /></div>
           ))}
-          <div className="tiny">{ptr.practice_run ? "The three section scores are enough; the total isn't needed." : "Total 205–805; sections 60–90."}</div>
+          <div className="tiny">{ptr.practice_run ? "The three section scores are enough; the total isn't needed." : "Total 205–805, ending in 5; sections 60–90."}</div>
+          {problem && Object.values(scores).some(Boolean) && <div className="small" role="alert">{problem}</div>}
         </div>
         <div className="spacer" />
-        <button className="btn" style={{ background: k.c, borderColor: k.c }} disabled={!scores.quant && !scores.total} onClick={() => void save()}>Save the scores</button>
+        <button className="btn" style={{ background: k.c, borderColor: k.c }} disabled={!!problem} onClick={() => void save()}>Save the scores</button>
       </div>
     </Screen>
   );
@@ -90,7 +93,7 @@ function MockAfter({ piece, onDone }: { piece: Piece; onDone: (l: Logged | null)
     return <Screen><div className="column"><div className="eyebrow">Logged</div><div className="title">Saved. That's your starting point; nothing else changes yet.</div>
       <div className="spacer" /><button className="btn" autoFocus onClick={() => onDone(null)}>Back to today</button></div></Screen>;
   }
-  const verdict = res?.total ? mockVerdict(content!, piece.planWeek, res.total) : null;
+  const verdict = res?.total ? mockVerdict(content!, piece.planWeek, res.total, d.settings.target) : null;
   const seenBefore = res && !res.fresh;
   const topics = row.section === "quant" ? [...QUANT_TOPICS] : row.section === "di" ? ["data sufficiency", "graphs & tables", "two-part analysis", "multi-source reasoning"] : ["rc", "cr"];
   const weakSection = res && res.quant !== null && res.verbal !== null && res.di !== null
@@ -158,3 +161,4 @@ function RebuildOffer({ section }: { section: "quant" | "di" | "rc" }) {
     </div>
   );
 }
+

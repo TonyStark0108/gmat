@@ -12,7 +12,7 @@ import { buildWeek, type WeekPlan } from "./week";
 /** The settings a week's plan depends on; if these change, the week is rebuilt. */
 export function planKey(s: Settings): string {
   return JSON.stringify([s.startDate, s.saturday, s.mornings, s.busCounts, s.busMinutesPerWeekday, s.pauses,
-    s.practiceRun, s.verbalReviewOnBus, s.finishDate, s.testDate, s.life, s.fitMode, s.rebuild]);
+    s.practiceRun, s.verbalReviewOnBus, s.finishDate, s.testDate, s.life, s.fitMode, s.rebuild, s.exams36, s.practiceRunKind]);
 }
 
 export function weekPlanOf(d: Derived, weekStart: string, s: Settings): WeekPlan | null {
@@ -35,27 +35,36 @@ export function weekEvents(pieces: Piece[], d: Derived, s: Settings, today: stri
   const ws = weekStartOf(today);
   const existing = d.weeks.get(ws);
   const key = planKey(s);
-  if (existing && existing.key === key) return [];
+  // a restore brings in another device's history: the current week is rebuilt around it (past weeks stay)
+  const restoredSince = existing && d.restoredAt !== null && d.restoredAt > existing.ts;
+  if (existing && existing.key === key && !restoredSince) return [];
   const done = new Set([...d.done, ...pieces.filter((p) => letGo.has(p.taskId)).map((p) => p.id)]);
-  const plan = buildWeek({ weekStart: ws, pieces, done, settings: s, fromDay: today, carried: carriedInto(d, ws), busMinutes });
+  // first built: the whole week from Monday, even if the app first opens on a Thursday; rebuilt: from today
+  const fromDay = existing ? today : (ws > s.startDate ? ws : s.startDate);
+  const plan = buildWeek({ weekStart: ws, pieces, done, settings: s, fromDay, carried: carriedInto(d, ws), busMinutes });
   // A rebuild keeps this week's finished chips on the week screen.
-  const keep = existing ? existing.chips.filter((c) => d.done.has(c.pieceId)) : [];
+  // ...only chips finished this week (after a restore, the other device's earlier work stays in its own week)
+  const keep = existing ? existing.chips.filter((c) => d.done.has(c.pieceId) && d.doneAt.get(c.pieceId)!.day >= ws) : [];
   const chips = [...keep, ...plan.chips.filter((c) => !keep.some((k) => k.pieceId === c.pieceId))];
   return [{ type: "week.built", week: ws, chips, mockDay: plan.mockDay, key, light: plan.light }];
 }
 
 /**
- * A week counts when every chip and every review it asked for was done by Sunday night, and the
- * rest day was taken (tapped, or a day under 15 minutes). Stored once, so "weeks done" never drops.
+ * A week counts when every chip and every review it asked for was done by Sunday night. A rest day is
+ * suggested, not required (see restTaken). Stored once, so "weeks done" never drops.
  */
-export function weekCounts(plan: WeekPlan, d: Derived, today: string, reviewsDone: boolean): boolean {
+export function weekCounts(plan: WeekPlan, d: Derived, _today: string, reviewsDone: boolean): boolean {
   if (plan.pause || plan.chips.length === 0 || !reviewsDone) return false;
   const end = plusDays(plan.weekStart, 6);
-  if (!plan.chips.every((c) => d.done.has(c.pieceId) && d.doneAt.get(c.pieceId)!.day <= end)) return false;
-  if (d.restTapped.has(plan.weekStart)) return true;
+  return plan.chips.every((c) => d.done.has(c.pieceId) && d.doneAt.get(c.pieceId)!.day <= end);
+}
+
+/** Was a rest day taken this week (tapped, or a day under 15 minutes)? Only for the gentle suggestion. */
+export function restTaken(weekStart: string, d: Derived, today: string): boolean {
+  if (d.restTapped.has(weekStart)) return true;
   for (let i = 0; i < 7; i++) {
-    const day = ymd(addDays(parseYmd(plan.weekStart), i));
-    if (day >= today) break;             // only days that are over
+    const day = ymd(addDays(parseYmd(weekStart), i));
+    if (day >= today) break;
     if ((d.minutesByDay.get(day) ?? 0) < 15) return true;
   }
   return false;

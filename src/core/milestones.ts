@@ -47,7 +47,7 @@ const KIND_WORDS: Record<string, [string, string]> = {
 export function whatsLeftFor(level: number, pieces: Piece[], done: Set<string>): string {
   const L = LEVELS.find((x) => x.n === level);
   if (!L) return "";
-  if (!L.weeks) return "One fresh official mock at 665 or above.";
+  if (!L.weeks) return "Your last two fresh official mocks within 10 of your target, the latest not lower.";
   const [a, b] = L.weeks;
   const left = pieces.filter((p) => p.planWeek >= a && p.planWeek <= b && !done.has(p.id) && p.last);
   const mocks = left.filter((p) => p.task.kind === "mock").map((p) => p.task.title ?? "a mock");

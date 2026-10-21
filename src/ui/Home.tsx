@@ -8,6 +8,7 @@ import { alternativeFor, chooseCard, type Card } from "../core/card";
 import { longDate } from "../core/calendar";
 import type { MixChoice } from "../core/events";
 import { inWords } from "../core/grid";
+import { restTaken } from "../core/weekly";
 import { moveMockDay } from "../core/mocks";
 import { MIX_NAMES } from "../core/mix";
 import { cardContext } from "../core/model";
@@ -126,7 +127,7 @@ export function Home() {
                 <div style={{ fontSize: 19 }}>Instead: {titleOf(skipFor.alt)}</div>
                 <div className="small">{metaOf(skipFor.alt)}</div>
                 <div className="row">
-                  <button className="btn small" style={{ flex: 1 }} onClick={() => { setSkipFor(null); void start(skipFor.alt!); }}>Do this</button>
+                  <button className="btn small outline" style={{ flex: 1 }} onClick={() => { setSkipFor(null); void start(skipFor.alt!); }}>Do this</button>
                   <button className="btn ghost small" onClick={() => { setSkipFor(null); say("It's here when you are."); }}>Neither, later</button>
                 </div>
               </>
@@ -242,7 +243,7 @@ function CardView({ card, onPrimary, onSkip }: { card: Card; onPrimary: (() => v
       break;
     }
     case "weekdone":
-      v = { ...neutral, eb: "This week", title: "The week is done.", body: "Cards, or rest. Rest counts.", start: m.cards.length ? "Cards" : undefined, onStart: () => go("/cards") };
+      v = { ...neutral, eb: "This week", title: "The week is done.", body: restTaken(m.weekStart, d, today) ? "Cards, or rest. Rest counts." : "A rest day this week helps the next one. Cards if you'd like.", start: m.cards.length ? "Cards" : undefined, onStart: () => go("/cards") };
       break;
     case "cards":
       v = { ...cardsK, eb: card.why === "late" ? "Tonight" : "Cards", title: card.why === "late" ? "Cards, or nothing tonight." : card.why === "fallback" ? "Nothing else fits right now. Cards do." : "Cards",
@@ -265,16 +266,20 @@ function CardView({ card, onPrimary, onSkip }: { card: Card; onPrimary: (() => v
     }
     case "resumeReview": {
       const k = card.set ? SUBJECT[card.set.section] : SUBJECT.general;
-      const done = card.items.filter((it) => (d.attempts.get(it.id) ?? []).some((x) => x.review === card.review)).length;
-      v = { col: k.c, t: k.t, dk: k.d, eb: "Waiting where you left it", title: card.set ? "The review" : "Mixed review", start: "Carry on",
-        prog: { w: card.items.length ? done / card.items.length : 0, t: `${done} of ${card.items.length}` }, border: `4px double ${k.c}` };
+      const atTags = d.reviewStep.get(card.review) === "tags";
+      const need = card.items.filter((it) => it.needsTag);
+      const done = atTags ? need.filter((it) => d.tags.has(it.id)).length : card.items.filter((it) => (d.attempts.get(it.id) ?? []).some((x) => x.review === card.review)).length;
+      const total = atTags ? need.length : card.items.length;
+      v = { col: k.c, t: k.t, dk: k.d, eb: "Waiting where you left it", title: card.set ? (atTags ? "The review: reasons to finish" : "The review") : "Mixed review", start: "Carry on",
+        prog: { w: total ? done / total : 0, t: atTags ? `${done} of ${total} reasons in` : `${done} of ${total}` }, border: `4px double ${k.c}` };
       break;
     }
     case "mixed": {
       const n = card.items.length;
       const k = SUBJECT[card.items[0].section];
-      v = { col: k.c, t: k.t, dk: k.d, eb: "Review", title: `${inWords(n)} ${n === 1 ? "question" : "questions"}, mixed.`,
-        ptr: card.returning ? `${inWords(card.returning)} you haven't seen in a while.` : undefined, meta: `about ${Math.max(5, n * 3)} minutes`,
+      v = { col: k.c, t: k.t, dk: k.d, eb: card.stubborn ? "The stubborn ones" : "Review",
+        title: card.stubborn ? `${inWords(n)} stubborn ${n === 1 ? "one" : "ones"}, a fresh look.` : `${inWords(n)} ${n === 1 ? "question" : "questions"}, mixed.`,
+        ptr: card.stubborn ? "Missed three times: they come back every ten days until they're right twice." : card.returning ? `${inWords(card.returning)} you haven't seen in a while.` : undefined, meta: `about ${Math.max(5, n * 3)} minutes`,
         where: card.items.some((it) => it.source === "book") ? "here, with the book" : "opens GMAT Club", start: "Start", skip: "Skip", border: `4px double ${k.c}` };
       break;
     }
@@ -282,7 +287,7 @@ function CardView({ card, onPrimary, onSkip }: { card: Card; onPrimary: (() => v
       const p = card.piece;
       const k = SUBJECT[p.section];
       const isMock = card.kind === "mock";
-      v = { col: k.c, t: k.t, dk: k.d, eb: card.kind === "resume" ? "Waiting where you left it" : isMock ? "Today · mock" : card.kind === "redo" ? `${k.name} · again` : k.name,
+      v = { col: k.c, t: k.t, dk: k.d, eb: card.kind === "task" && card.ahead ? "This week's done · next week, early" : card.kind === "resume" ? "Waiting where you left it" : isMock ? "Today · mock" : card.kind === "redo" ? `${k.name} · again` : k.name,
         title: titleOf(p), ptr: pointerOf(p, a.content) || undefined, meta: isMock ? "about 2 h 15 min" : metaOf(p), where: whereOf(p),
         start: card.kind === "resume" ? "Carry on" : isMock ? "Open" : "Start",
         skip: card.kind === "task" ? "Skip" : undefined, time: card.kind === "task" };
@@ -330,7 +335,7 @@ function AfterTest() {
   const [score, setScore] = useState("");
   const asked = d.seen.get("after-test");
   if (d.testResult) {
-    const reached = d.testResult.score !== null && d.testResult.score >= 665;
+    const reached = d.testResult.score !== null && d.testResult.score >= d.settings.target;
     return (
       <div className="card" style={{ boxShadow: "6px 6px 0 var(--gen-t)" }}>
         <div className="eyebrow">After the test</div>

@@ -10,7 +10,7 @@ import type { Content, Section } from "./content";
 import type { AppEvent, EventBody, ExtraSpec } from "./events";
 import { buildExtras, extrasFor, reserveCr, reserveCrPiece, specToPiece, type ExtraPiece } from "./extras";
 import { dateCheck, targetDate } from "./life";
-import { boughtExams36, endPhase, isReady, mockResults, type EndPhase, type MockResult } from "./mocks";
+import { endPhase, isReady, mockResults, type EndPhase, type MockResult } from "./mocks";
 import { planTasks, toPieces, type Piece } from "./pieces";
 import { levelFromWork, percentDone } from "./progress";
 import { buildReviews, weekReviews, type ReviewModel, type SetReview } from "./review";
@@ -18,7 +18,7 @@ import { busOn, derive, gapDays, type Derived } from "./state";
 import { WARM_WELCOME_AFTER } from "./life";
 import { busChip, rideMinutes } from "./bus";
 import { extraDeskFor, projectFinish, type WeekPlan } from "./week";
-import { leftShare, studyDaysLeft, weekCounts, weekEvents, weekPlanOf } from "./weekly";
+import { studyDaysLeft, weekCounts, weekEvents, weekPlanOf } from "./weekly";
 import type { CardCtx } from "./card";
 import type { MixChoice } from "./events";
 import { recommendMix, sectionOfMix, type MixRec, type MixSection } from "./mix";
@@ -43,6 +43,7 @@ export interface Model {
   mocks: MockResult[];
   ready: boolean;
   level: number;
+  workLevel: number;
   pct: number;
   letGo: Set<string>;
   phase: EndPhase;
@@ -82,7 +83,7 @@ export function buildModel(content: Content, events: AppEvent[], now: Date, onli
   const cards = buildCards(content, d);
   const letGo = new Set([...d.letgo.entries()].filter(([, keep]) => !keep).map(([t]) => t));
   const mocks = mockResults(plan, d);
-  const ready = isReady(mocks, boughtExams36(d));
+  const ready = isReady(mocks, s.target ?? 685);
   const adapt = buildAdapt(content, reviews, d, byId, mocks, today);
   const errorsHalf = reviews.errorsSoFar === 0 || reviews.retired >= reviews.errorsSoFar / 2;
   return {
@@ -90,7 +91,9 @@ export function buildModel(content: Content, events: AppEvent[], now: Date, onli
     weekExtras: extrasFor(extras, weekStart, today, d),
     weekReviews: weekReviews(reviews, weekStart, d.settings),
     reviews, cards, cardsDue: dueCards(cards, now.getTime()).length, adapt, mocks, ready,
-    level: Math.max(d.level, levelFromWork(plan, d.done, errorsHalf, ready)),
+    // Level 7 is Ready, recomputed from the mocks every time and never stored; levels 1–6 count work done
+    level: ready ? 7 : Math.max(Math.min(d.level, 6), levelFromWork(plan, d.done, errorsHalf)),
+    workLevel: Math.max(Math.min(d.level, 6), levelFromWork(plan, d.done, errorsHalf)),
     pct: percentDone(plan, d.done, letGo), letGo, phase: endPhase(d.settings.testDate, today),
     ride: rideMinutes(d, now.getTime()), bus: busOn(d, now.getTime()), busChip: !busOn(d, now.getTime()) && busChip(d, now),
     back: gapDays(d, today) >= WARM_WELCOME_AFTER && !d.seen.has(`back:${today}`) && d.setupDone && today > d.settings.startDate,
@@ -118,15 +121,9 @@ export function upkeep(m: Model): EventBody[] {
 
   out.push(...weekEvents(plan, d, s, today, m.ride, m.letGo));
 
-  if (isNewWeek) {
-    // the date check runs after a week where more than a third was left
-    const prevWs = plusDays(ws, -7);
-    const prev = weekPlanOf(d, prevWs, s);
-    if (prev && !prev.pause && !d.datechecks.some((x) => x.week === ws)) {
-      const minutes = (id: string) => m.byId.get(id)?.minutes ?? 0;
-      if (leftShare(prev, d, minutes) > 1 / 3) out.push(dateCheckEvent(m, ws));
-    }
-  }
+  // At the start of every calendar week (including after weeks the app was never opened), compare the
+  // projected finish with the agreed one. Only a finish date that stops working shows anything.
+  if (isNewWeek && d.setupDay && ws > weekStartOf(s.startDate) && !d.datechecks.some((x) => x.week === ws)) out.push(dateCheckEvent(m, ws));
 
   // new starter cards: about 15 a week from the start, slower if cards pile up
   if (today >= s.startDate && !d.introWeeks.has(ws)) {
@@ -145,7 +142,7 @@ export function upkeep(m: Model): EventBody[] {
     const st = weekStatus(m, w);
     if (st.plan && weekCounts(st.plan, d, today, st.reviewsDone)) out.push({ type: "week.counted", week: w });
   }
-  if (m.level > d.level) out.push({ type: "level", level: m.level });
+  if (m.workLevel > d.level) out.push({ type: "level", level: m.workLevel });
   if (s.agreedFinish === null && d.setupDone && plan.length) {
     const from = today > s.startDate ? today : s.startDate;
     const p = projectFinish({ pieces: plan, done: d.done, settings: s, fromWeek: weekStartOf(from), fromDay: from, busMinutes: m.ride });

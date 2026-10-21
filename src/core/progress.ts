@@ -39,8 +39,7 @@ export const LEVELS = [
 ] as const;
 
 /** The highest level the work so far unlocks (levels 1–6 count plan weeks done). */
-export function levelFromWork(pieces: Piece[], done: Set<string>, errorsHalfRetired = true, ready = false): number {
-  if (ready) return 7;              // Level 7 depends only on mocks
+export function levelFromWork(pieces: Piece[], done: Set<string>, errorsHalfRetired = true): number {
   let level = 0;
   for (const L of LEVELS) {
     if (!L.weeks) break;

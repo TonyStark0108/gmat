@@ -248,13 +248,15 @@ function Tags({ s, header, onDone }: { s: SR; header: React.ReactNode; onDone: (
     }]),
     ["Enter", () => { if (all) void save(); }],
   ]), [tags, lines, all]);
-  const save = async () => {
+  const save = async (later = false) => {
     for (const it of need) {
+      if (!tags[it.id]) continue;            // the ones without a reason wait for later
       const tag = tags[it.id]!, line = lines[it.id].trim();
       const prev = d.tags.get(it.id);
       if (prev?.tag !== tag || (prev?.line ?? "") !== line) await record({ type: "review.tag", item: it.id, tag, line: line || undefined });
       if (line && (prev?.line ?? "") !== line) await record({ type: "line", source: `review:${it.id}`, text: line, front: errorFront(it.section, it.topic, tag), topic: it.topic, section: it.section });
     }
+    if (later) { await record({ type: "review.step", review: s.id, step: "tags" }); go("/"); return; }
     onDone();
   };
   return (
@@ -269,7 +271,10 @@ function Tags({ s, header, onDone }: { s: SR; header: React.ReactNode; onDone: (
         </div>
       ))}
       <div className="spacer" />
-      <button className="btn" disabled={!all} onClick={() => void save()}>Next</button>
+      <div className="row">
+        <button className="btn" style={{ flex: 1 }} disabled={!all} onClick={() => void save()}>Next</button>
+        <button className="btn ghost" disabled={all || !need.some((it) => tags[it.id])} onClick={() => void save(true)}>Save these, finish later</button>
+      </div>
     </div></Screen>
   );
 }
@@ -337,7 +342,7 @@ export function TopupOffer({ offer }: { offer: Offer }) {
     <div className="note">
       <div style={{ fontSize: 18 }}>{m.adapt.topupLine(offer)}</div>
       <div className="row">
-        <button className="btn small" style={{ flex: 1 }} onClick={async () => {
+        <button className="btn small outline" style={{ flex: 1 }} onClick={async () => {
           const spec = m.adapt.topupSpec(offer, ws);
           if (spec) await record({ type: "extra.added", extra: spec });
           await record({ type: "offer", offer: offer.id, answer: "add" });

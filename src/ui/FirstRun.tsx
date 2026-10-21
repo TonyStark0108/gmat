@@ -157,7 +157,7 @@ export function Setup() {
           <div className="title">Here's the shape of it.</div>
           <DateFields />
           <div className="tiny" style={{ lineHeight: 1.5 }}>Finish date and hours are linked. Change one and the other moves.
-            {auto && !d.settings.finishDate ? ` At this pace: ${longDate(auto)}.` : ""}</div>
+            {auto && !d.settings.finishDate ? ` At this pace: ${longDate(auto)}.` : auto ? ` With your slots as they are: ${longDate(auto)}.` : ""}</div>
           <div className="spacer" />
           <button className="btn" onClick={() => setStep(2)}>Next</button>
         </div>

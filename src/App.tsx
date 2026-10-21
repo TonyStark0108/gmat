@@ -12,6 +12,7 @@ import { SetReviewScreen } from "./ui/review/SetReview";
 import { SettingsScreen } from "./ui/Settings";
 import { ShareIn } from "./ui/Share";
 import { TaskRunner } from "./ui/tasks/TaskRunner";
+import { QuestionLog } from "./ui/QuestionLog";
 import { Week } from "./ui/Week";
 
 // the tutor (and the Claude library) loads only when you open it
@@ -46,6 +47,7 @@ export function App() {
   if (path === "/week") return <Week />;
   if (path === "/progress") return <ProgressScreen />;
   if (path === "/errors") return <ErrorsScreen />;
+  if (path === "/log") return <QuestionLog />;
   if (path === "/life") return <Life />;
   if (path === "/share") return <ShareIn params={params} />;
   if (path === "/settings") return <SettingsScreen />;

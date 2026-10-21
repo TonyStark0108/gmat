@@ -11,7 +11,9 @@ export const QUANT_TOPICS = [
   "number properties", "probability", "combinations & permutations",
 ] as const;
 
-export const DI_TYPES = ["data sufficiency", "graphs & tables", "two-part analysis", "multi-source reasoning"] as const;
+/** Data Insights' five question types. */
+export const DI_TYPES = ["data sufficiency", "graphics interpretation", "table analysis", "two-part analysis", "multi-source reasoning"] as const;
+export const DI_TYPE_OF: Record<string, string> = { DS: "data sufficiency", GI: "graphics interpretation", TA: "table analysis", TPA: "two-part analysis", MSR: "multi-source reasoning" };
 export const RC_TYPES = ["main idea", "inference", "detail", "purpose", "author's attitude"] as const;
 export const RC_TOPICS = ["law", "science", "social science", "humanities"] as const;
 
@@ -66,6 +68,7 @@ export function topicName(topic: string): string {
 
 /** The plan topic whose GMAT Club lists serve a topic ("ds · percents" uses the percents lists). */
 export function listTopic(topic: string): string {
+  if (topic === "graphics interpretation" || topic === "table analysis") return "graphs & tables";   // the plan's lists combine them
   return topic.startsWith("ds · ") ? topic.slice(5) : topic;
 }
 

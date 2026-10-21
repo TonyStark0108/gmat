@@ -7,7 +7,6 @@ import { useApp } from "../app/store";
 import { shortDate } from "../core/calendar";
 import { climb, milestones, readingSetsLeft, sectionBars, whatsLeftFor } from "../core/milestones";
 import { LEVELS } from "../core/progress";
-import { TARGET } from "../core/settings";
 import { go } from "../app/router";
 import { Back, Screen } from "./bits";
 
@@ -82,16 +81,17 @@ export function ProgressScreen() {
 }
 
 function MockDots() {
-  const { m } = useApp();
+  const { m, d } = useApp();
+  const TARGET = d.settings.target;
   const W = 640, H = 70, pad = 20;
   const x = (s: number) => pad + ((W - 2 * pad) * (s - 205)) / 600;
   const dots = m.mocks.filter((r) => r.official && r.total !== null);
   return (
     <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Official mock scores" style={{ width: "100%", height: "auto" }}>
       <line x1={pad} x2={W - pad} y1={40} y2={40} stroke="var(--line-2)" strokeWidth="1.5" />
-      <rect x={x(TARGET)} width={x(685) - x(TARGET)} y={28} height={24} fill="var(--mk-t)" />
+      <rect x={x(TARGET - 10)} width={x(Math.min(805, TARGET + 20)) - x(TARGET - 10)} y={28} height={24} fill="var(--mk-t)" />
       <line x1={x(TARGET)} x2={x(TARGET)} y1={22} y2={58} stroke="var(--mk)" strokeWidth="1.5" />
-      <text x={x(TARGET)} y={16} textAnchor="middle" fontSize="11" fill="var(--mk-d)" fontFamily="var(--mono)">665</text>
+      <text x={x(TARGET)} y={16} textAnchor="middle" fontSize="11" fill="var(--mk-d)" fontFamily="var(--mono)">{TARGET}</text>
       <text x={pad} y={66} fontSize="10" fill="var(--faint)" fontFamily="var(--mono)">205</text>
       <text x={W - pad} y={66} textAnchor="end" fontSize="10" fill="var(--faint)" fontFamily="var(--mono)">805</text>
       {dots.map((r) => <circle key={r.pieceId} cx={x(r.total!)} cy={40} r={r.practiceRun ? 4 : 7} fill={r.practiceRun ? "var(--rest)" : "var(--mk)"}><title>{r.practiceRun ? "start" : `${r.total}`}</title></circle>)}
@@ -108,7 +108,8 @@ export function ErrorsScreen() {
       <div className="column">
         <Back />
         <div className="title">What to work on</div>
-        <div style={{ fontSize: 19 }}>{m.reviews.retired} retired · {m.reviews.inReview} in review</div>
+        <div style={{ fontSize: 19 }}>{m.reviews.retired} retired · {m.reviews.inReview} in review{m.reviews.stubborn ? ` · ${m.reviews.stubborn} stubborn` : ""}</div>
+        <div className="row wrap"><button className="btn small outline" onClick={() => go("/log")}>Log a question from another source</button></div>
         {!groups.length && <div className="muted" style={{ fontSize: 17 }}>Nothing in review right now.</div>}
         {groups.map((g, i) => (
           <div key={i} className="box" style={{ gap: 4 }}>

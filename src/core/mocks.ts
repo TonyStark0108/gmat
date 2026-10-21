@@ -3,7 +3,7 @@
 import { addDays, daysBetween, parseYmd, plusDays, weekStartOf, ymd } from "./calendar";
 import type { Piece } from "./pieces";
 import type { Derived } from "./state";
-import { TARGET } from "./settings";
+import { READY_MARGIN } from "./settings";
 
 export interface MockResult {
   pieceId: string;
@@ -40,12 +40,15 @@ export function mockResults(pieces: Piece[], d: Derived): MockResult[] {
 
 export const boughtExams36 = (d: Derived) => d.admin.get(EXAMS_3_6)?.answer === "done";
 
-/** Ready: one fresh official mock at 665+, or with Exams 3–6 bought, two fresh ones in a row at 655+. */
-export function isReady(mocks: MockResult[], bought: boolean): boolean {
+/**
+ * Ready, worked out fresh every time (never stored): the last two fresh official mocks are both within
+ * 10 of your target, and the latest isn't lower than the one before. One good mock is not enough.
+ */
+export function isReady(mocks: MockResult[], target: number): boolean {
   const fresh = mocks.filter((m) => m.official && m.fresh && !m.practiceRun && m.total !== null);
-  if (fresh.some((m) => m.total! >= TARGET)) return true;
-  if (bought) for (let i = 1; i < fresh.length; i++) if (fresh[i - 1].total! >= 655 && fresh[i].total! >= 655) return true;
-  return false;
+  if (fresh.length < 2) return false;
+  const [a, b] = fresh.slice(-2);
+  return a.total! >= target - READY_MARGIN && b.total! >= target - READY_MARGIN && b.total! >= a.total!;
 }
 
 export interface BookingCard { why: "ready" | "bookby"; suggest: string }
@@ -94,4 +97,41 @@ export function moveMockDay(today: string, lastMockDay: string | null): string {
 export function rehearsal(p: Piece, pieces: Piece[]): boolean {
   const mocks = pieces.filter((x) => x.task.kind === "mock" && x.task.optional !== "setting");
   return p.task.pointer.exam === 2 || mocks[mocks.length - 1]?.id === p.id;
+}
+
+export interface Checkpoint { id: string; total: number; target: number; weeks: number; finish: string; bookBy: string; limited: boolean }
+
+/**
+ * The week-8 checkpoint: after Official Exam 1, if the total is more than 60 below the target, propose a
+ * specific extension instead of carrying on as if on track: two weeks, plus one for every 10 points
+ * beyond that, at most eight, and never so late that a retake no longer fits before the hard stop.
+ */
+export function week8Checkpoint(mocks: MockResult[], s: { target: number; finishDate: string | null; agreedFinish: string | null; bookBy: string; hardStop: string }): Checkpoint | null {
+  const m = mocks.find((x) => x.official && x.exam === 1 && x.planWeek === 8 && x.total !== null);
+  if (!m || m.total! >= s.target - 60) return null;
+  const beyond = s.target - 60 - m.total!;
+  let weeks = Math.min(8, 2 + Math.ceil(beyond / 10));
+  const base = s.finishDate ?? s.agreedFinish ?? s.bookBy;
+  const latest = plusDays(s.hardStop, -4 * 7);          // room for the test and a retake 16+ days later
+  let finish = plusDays(base, weeks * 7);
+  let limited = false;
+  while (finish > latest && weeks > 1) { weeks--; finish = plusDays(base, weeks * 7); limited = true; }
+  const bookBy = plusDays(s.bookBy, weeks * 7) > plusDays(s.hardStop, -28) ? plusDays(s.hardStop, -28) : plusDays(s.bookBy, weeks * 7);
+  return { id: `checkpoint8:${m.pieceId}`, total: m.total!, target: s.target, weeks, finish, bookBy, limited };
+}
+
+/** GMAT Focus scores: the total is 205–805 and ends in 5; each section is 60–90. Anything else is a typo. */
+export function scoreProblem(sc: { total: string; quant: string; verbal: string; di: string }, practiceRun = false): string | null {
+  const t = sc.total ? Number(sc.total) : null;
+  if (!practiceRun || t !== null) {
+    if (t === null) return "Enter the total.";
+    if (t < 205 || t > 805 || t % 10 !== 5) return `${sc.total} can't be a GMAT Focus total: it's 205–805 and ends in 5 (like 615 or 645).`;
+  }
+  for (const [k, name] of [["quant", "Quant"], ["verbal", "Verbal"], ["di", "Data Insights"]] as const) {
+    const v = sc[k];
+    if (!v) return `Enter the ${name} score.`;
+    const n = Number(v);
+    if (n < 60 || n > 90) return `${name} ${v} isn't possible: sections are 60–90.`;
+  }
+  return null;
 }

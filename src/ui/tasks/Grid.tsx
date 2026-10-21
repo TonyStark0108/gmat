@@ -104,7 +104,7 @@ export function BookGrid({ piece, onDone, numbers, bookId, embedded, onSubmitted
         style={{ height: 46, border: "1.5px solid var(--line-2)", borderRadius: 10, padding: "0 12px", font: "400 13px var(--mono)", background: "#fff" }} />
       {hint && <div className="small">{hint}</div>}
       {m.adapt.carelessLeads && piece.group === "Q" && <div className="small">Check units and what's being asked.</div>}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(400px, 1fr))", gap: "6px 22px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(400px, 100%), 1fr))", gap: "6px 22px" }}>
         {nums.map((n) => {
           const c = cur(n);
           return (

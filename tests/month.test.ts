@@ -101,7 +101,7 @@ describe.skipIf(!C)("a simulated month (Phase 2 check)", () => {
     expect(end.d.cardSessions.length).toBeGreaterThan(3);
     expect(end.d.introduced.size).toBeGreaterThanOrEqual(15 * 4);
     expect(bot.cardsSeen.some((c) => c.card === "mixed")).toBe(true);
-    for (const it of end.reviews.items.values()) if (it.state === "movedon") expect(it.misses).toBeGreaterThanOrEqual(3);
+    for (const it of end.reviews.items.values()) if (it.state === "stubborn") expect(it.misses).toBeGreaterThanOrEqual(3);
   });
 
   it("the pause (24 Dec – 1 Jan) holds no time: that week's plan fits the Saturday after it", () => {

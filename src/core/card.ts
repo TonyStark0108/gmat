@@ -25,9 +25,9 @@ export type Card =
   | { kind: "resumeReview"; review: string; set: SetReview | null; items: Item[] }
   | { kind: "mock"; piece: Piece }
   | { kind: "review"; set: SetReview }
-  | { kind: "mixed"; items: Item[]; returning: number }
+  | { kind: "mixed"; items: Item[]; returning: number; stubborn?: boolean }
   | { kind: "redo"; piece: ExtraPiece }
-  | { kind: "task"; piece: Piece; next: Piece | null }
+  | { kind: "task"; piece: Piece; next: Piece | null; ahead?: boolean }
   | { kind: "cards"; due: number; why: "due" | "late" | "back" | "fallback" | "weekdone" | "end" }
   | { kind: "weekdone" }
   | { kind: "nothing"; why: "bus" | "offline" | "slot" | "slotEnding" | "skipped" };
@@ -56,8 +56,9 @@ export interface CardCtx {
 
 /** Does this piece fit what's happening right now? (Step 1) */
 export function fitsNow(p: Piece, c: CardCtx, slot: SlotNow | null): boolean {
-  if (c.bus) return p.busOk;
+  // no signal rules out anything that needs it, on the bus too, so the card moves to something that works
   if (!c.online && !p.offlineOk) return false;
+  if (c.bus) return p.busOk;
   if (slot?.kind === "morning") {
     // Desk work that fits the slot: quant and DI; never a mock or a full LSAT set.
     // With 10 minutes left, no new piece starts.
@@ -150,6 +151,8 @@ export function chooseCard(c: CardCtx): Card {
       const items = mixedSession(R, c.d, c.today, { bus: c.bus, online: c.online, morning: slot?.kind === "morning" }, c.topicWeight);
       const fitsSlot = slot?.kind !== "morning" || (slot.minutesLeft > 10 && items.length * 3 <= slot.minutesLeft);
       if (items.length && fitsSlot) return { kind: "mixed", items, returning: items.filter((it) => it.state === "return").length };
+      const stubborn = mixedSession(R, c.d, c.today, { bus: c.bus, online: c.online, morning: slot?.kind === "morning" }, c.topicWeight, true);
+      if (stubborn.length && fitsSlot && !skipped.has("stubborn")) return { kind: "mixed", items: stubborn, returning: 0, stubborn: true };
     }
   }
   if (phase === "testweek") return due ? { kind: "cards", due, why: "end" } : { kind: "weekdone" };
@@ -191,7 +194,12 @@ export function chooseCard(c: CardCtx): Card {
     if (reserve) return { kind: "task", piece: reserve, next: null };
   }
 
-  // 7. The week is done: cards or rest.
+  // 7. The week's work is done early: offer next week's first task (it never changes the week that counted).
+  if (chips.length && !requiredLeft && phase === "plan") {
+    const inWeek = new Set(chips.map((p) => p.id));
+    const ahead = c.pieces.find((p) => !c.d.done.has(p.id) && !inWeek.has(p.id) && !c.letGo?.has(p.taskId) && p.task.kind !== "mock" && ready(p, c));
+    if (ahead && fit(ahead) && !skipped.has(ahead.id)) return { kind: "task", piece: ahead, next: null, ahead: true };
+  }
   if (chips.length && !requiredLeft) return { kind: "weekdone" };
 
   // Everything is filtered out: cards if there are any, otherwise say so.

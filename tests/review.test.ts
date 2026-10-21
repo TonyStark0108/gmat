@@ -71,23 +71,33 @@ describe("test 4 · one test per arrow of the redo diagram", () => {
     expect(item(log, "2026-12-22T08:00", "og1|1").state).toBe("redo");
   });
 
-  it("Redo → Moved on: the third miss", () => {
+  it("Redo → Stubborn (audit D17): the third miss keeps it, back in ten days", () => {
     let log = retry(loggedSet(), "2026-12-08T07:50", 1, "C");                // miss 2
     log = retry(log, "2026-12-10T07:50", 1, "D", "mixed", "mixed:x");        // miss 3
-    expect(item(log, "2026-12-10T08:00", "og1|1").state).toBe("movedon");
+    const it1 = item(log, "2026-12-10T08:00", "og1|1");
+    expect(it1.state).toBe("stubborn");
+    expect(it1.dueFrom).toBe("2026-12-20");
   });
 
-  it("Return → Moved on: the third miss", () => {
+  it("Return → Stubborn: the third miss", () => {
     let log = retry(loggedSet(), "2026-12-08T07:50", 1, "C");                // miss 2, redo
     log = retry(log, "2026-12-10T07:50", 1, "A", "mixed", "mixed:x");        // right: return
     log = retry(log, "2026-12-24T07:50", 1, "B", "mixed", "mixed:y");        // miss 3
-    expect(item(log, "2026-12-24T08:00", "og1|1").state).toBe("movedon");
+    expect(item(log, "2026-12-24T08:00", "og1|1").state).toBe("stubborn");
   });
 
-  it("right but unsure: straight to Return on a right retry, retires on a right return, never needs a tag", () => {
+  it("a stubborn one still retires: right, then right again a week or more later", () => {
+    let log = retry(loggedSet(), "2026-12-08T07:50", 1, "C");
+    log = retry(log, "2026-12-10T07:50", 1, "D", "mixed", "mixed:x");        // stubborn
+    log = retry(log, "2026-12-20T07:50", 1, "A", "mixed", "mixed:y");        // right
+    log = retry(log, "2027-01-04T07:50", 1, "A", "mixed", "mixed:z");        // right again, 15 days on
+    expect(item(log, "2027-01-04T08:00", "og1|1").state).toBe("retired");
+  });
+
+  it("right but unsure: straight to Return on a right retry, retires on a right return, and is asked for a reason (audit D18)", () => {
     let log = retry(loggedSet(), "2026-12-08T07:50", 3, "C");
     let it3 = item(log, "2026-12-08T08:00", "og1|3");
-    expect(it3.needsTag).toBe(false);
+    expect(it3.needsTag).toBe(true);
     expect(it3.state).toBe("return");
     log = retry(log, "2026-12-23T07:50", 3, "C", "mixed", "mixed:x");
     it3 = item(log, "2026-12-23T08:00", "og1|3");
@@ -150,12 +160,19 @@ describe("reading and CR", () => {
       .at("2026-12-07T19:30", { type: "piece.done", piece: "rc1#0" });
   }
 
-  it("single reading questions are never redone; three misses on one passage bring it back 3–7 days later", () => {
-    const log = rcLogged(["E", "E", "E", "D", "E", "A"]).at("2026-12-08T18:50", { type: "review.done", review: "set:rc1" });
+  it("single wrong reading questions are redone one by one (audit D16); three misses on a passage also bring the passage back", () => {
+    const log = rcLogged(["E", "E", "E", "D", "E", "A"])
+      .at("2026-12-08T18:50", { type: "review.answer", review: "set:rc1", item: "rc1|p1q1", attempt: "retry", value: "A" })
+      .at("2026-12-08T18:51", { type: "review.answer", review: "set:rc1", item: "rc1|p1q2", attempt: "retry", value: "C" })
+      .at("2026-12-08T18:52", { type: "review.answer", review: "set:rc1", item: "rc1|p1q3", attempt: "retry", value: "C" })
+      .at("2026-12-08T18:55", { type: "review.done", review: "set:rc1" });
     const m = buildModel(C, log.events, new Date("2026-12-11T19:00"));
-    expect(m.reviews.items.get("rc1|p1q1")!.state).toBe("done");
+    expect(m.reviews.items.get("rc1|p1q1")!.state).toBe("return");
+    expect(m.reviews.items.get("rc1|p1q2")!.state).toBe("redo");
     expect(m.extras.find((x) => x.xkind === "passage")?.availableFrom).toBe("2026-12-11");
-    expect(m.reviews.inReview).toBe(0);
+    expect(m.reviews.inReview).toBe(3);
+    const s = mixedSession(m.reviews, m.d, m.today, { bus: true, online: false, morning: false });
+    expect(s.map((x) => x.id)).toContain("rc1|p1q2");              // on the bus, with no signal
   });
 
   it("CR without a key: the review takes the official letters, then marks the set", () => {

@@ -10,6 +10,7 @@ import type { Piece } from "../core/pieces";
 import { derive, type Derived } from "../core/state";
 import type { WeekPlan } from "../core/week";
 import { db, devContent, record, storedContent } from "../data/db";
+import { autoBackup } from "../data/backup";
 
 export interface App {
   content: Content | null;
@@ -105,6 +106,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       checking.current = false;
     })();
   }, [content, online, d.setupDone]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A backup every day, automatically, into the folder you picked (spec change: daily, not weekly).
+  const backedUp = useRef<string | null>(null);
+  useEffect(() => {
+    if (!content || !d.setupDone || backedUp.current === studyDay(nowD)) return;
+    const last = d.lastBackup ? studyDay(new Date(d.lastBackup)) : null;
+    backedUp.current = studyDay(nowD);
+    if (last === studyDay(nowD)) return;
+    void autoBackup();
+  }, [content, d.setupDone, nowD]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const app: App = {
     content, contentState, setContent: (c) => { setContent(c); setContentState("ready"); },

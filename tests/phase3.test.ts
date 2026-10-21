@@ -16,26 +16,26 @@ import { settings, task } from "./helpers";
 
 const C = fixtureContent();
 
-describe("test 7 · each mock is judged against its own week's gap", () => {
-  it("50 points at week 8, 20–30 at week 11", () => {
-    expect(mockVerdict(C, 8, 615).onTrack).toBe(true);     // 50 below
-    expect(mockVerdict(C, 8, 605).onTrack).toBe(false);
-    expect(mockVerdict(C, 11, 635).onTrack).toBe(true);    // 30 below
-    expect(mockVerdict(C, 11, 625).onTrack).toBe(false);
-    expect(mockVerdict(C, 8, 670).line).toMatch(/At or above 665/);
+describe("test 7 · each mock is judged against its own week's gap below YOUR target (audit A1)", () => {
+  it("50 points at week 8, 20–30 at week 11, measured from 685", () => {
+    expect(mockVerdict(C, 8, 635, 685).onTrack).toBe(true);     // 50 below 685
+    expect(mockVerdict(C, 8, 625, 685).onTrack).toBe(false);
+    expect(mockVerdict(C, 11, 655, 685).onTrack).toBe(true);    // 30 below
+    expect(mockVerdict(C, 11, 645, 685).onTrack).toBe(false);
+    expect(mockVerdict(C, 8, 690, 685).line).toMatch(/At or above your target of 685/);
+    expect(mockVerdict(C, 8, 615, 665).onTrack).toBe(true);     // the same rule at another target
   });
 });
 
 describe("test 8 · the booking card", () => {
   const mock = (total: number, fresh = true, exam = 1): MockResult => ({ pieceId: `m${exam}`, exam, official: true, practiceRun: false, fresh, planWeek: 8, day: "2027-02-01", total, quant: null, verbal: null, di: null });
-  it("Ready: one fresh official mock at 665+, never a retake", () => {
-    expect(isReady([mock(665)], false)).toBe(true);
-    expect(isReady([mock(675, false)], false)).toBe(false);
-    expect(isReady([mock(655), mock(660, true, 2)], false)).toBe(false);
-  });
-  it("with Exams 3–6 bought: two fresh ones in a row at 655+", () => {
-    expect(isReady([mock(655), mock(660, true, 2)], true)).toBe(true);
-    expect(isReady([mock(655), mock(640, true, 2), mock(660, true, 3)], true)).toBe(false);
+  it("Ready (audit A2): the last two fresh official mocks both within 10 of the target, the latest not lower", () => {
+    expect(isReady([mock(700)], 685)).toBe(false);                                   // one good mock isn't enough
+    expect(isReady([mock(675), mock(680, true, 2)], 685)).toBe(true);
+    expect(isReady([mock(690), mock(680, true, 2)], 685)).toBe(false);               // the latest went down
+    expect(isReady([mock(665), mock(690, true, 2)], 685)).toBe(false);               // the first was more than 10 below
+    expect(isReady([mock(680), mock(690, false, 1)], 685)).toBe(false);              // a retake isn't fresh
+    expect(isReady([mock(680), mock(690, true, 2), mock(660, true, 3)], 685)).toBe(false);  // recomputed: the newest pair counts
   });
   it("appears at Ready, or at the book-by date; “Not yet” hides it for two weeks", () => {
     const log = new Log().at("2026-11-20T10:00", { type: "setup.done" });

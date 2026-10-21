@@ -8,7 +8,7 @@ import { useApp } from "../../app/store";
 import type { Section } from "../../core/content";
 import { otherList } from "../../core/links";
 import type { Piece } from "../../core/pieces";
-import { listTopic } from "../../core/topics";
+import { DI_TYPE_OF, listTopic } from "../../core/topics";
 import { record } from "../../data/db";
 import { Back, Screen } from "../bits";
 import { SUBJECT, pointerOf, titleOf, whereOf } from "../copy";
@@ -23,6 +23,9 @@ export function Outside({ piece, onDone }: { piece: Piece; onDone: (l: Logged | 
   const t = piece.task, ptr = t.pointer;
   const k = SUBJECT[piece.section];
   const [counts, setCounts] = useState({ right: 0, wrong: 0, unsure: 0 });
+  const diTypes = t.kind === "di_set" ? ((ptr.types as string[] | undefined) ?? []) : [];
+  const [byType, setByType] = useState<Record<string, { right: number; wrong: number; unsure: number }>>(() => Object.fromEntries(diTypes.map((x) => [x, { right: 0, wrong: 0, unsure: 0 }])));
+  const perType = diTypes.length > 1;
   const [gridDone, setGridDone] = useState(false);
   const refresher = ptr.refresher as { type: "video"; youtubeId: string; url: string; title: string } | { type: "cards"; topic: string } | undefined;
   const [refreshed, setRefreshed] = useState(!refresher || d.seen.has(`refresher:${piece.id}`));
@@ -63,7 +66,11 @@ export function Outside({ piece, onDone }: { piece: Piece; onDone: (l: Logged | 
 
   async function finish(adminAnswer?: "done" | "not now") {
     if (adminAnswer) await record({ type: "admin", piece: piece.id, answer: adminAnswer });
-    if (isQuestions) await record({ type: "outside", piece: piece.id, ...counts });
+    if (isQuestions && perType) {
+      const sum = Object.values(byType).reduce((a, x) => ({ right: a.right + x.right, wrong: a.wrong + x.wrong, unsure: a.unsure + x.unsure }), { right: 0, wrong: 0, unsure: 0 });
+      Object.assign(counts, sum);
+      await record({ type: "outside", piece: piece.id, ...sum, byType });
+    } else if (isQuestions) await record({ type: "outside", piece: piece.id, ...counts });
     const minutes = Math.min(cap, Math.round(awayMin.current));
     if (minutes > 0) await record({ type: "time", minutes, where: bus ? "bus" : "desk", piece: piece.id, source: t.kind });
     // "Not now" never blocks anything: the plan moves on and the card comes back in a week
@@ -149,7 +156,21 @@ export function Outside({ piece, onDone }: { piece: Piece; onDone: (l: Logged | 
         {isQuestions && (
           <div className="box">
             <div className="small">When you're back</div>
-            {counter("right", "Right")}{counter("wrong", "Wrong")}{counter("unsure", "Not sure")}
+            {perType ? diTypes.map((ty) => (
+              <div key={ty} style={{ display: "flex", flexDirection: "column" }}>
+                <div className="eyebrow" style={{ marginTop: 6 }}>{DI_TYPE_OF[ty] ?? ty}</div>
+                {(["right", "wrong", "unsure"] as const).map((key) => (
+                  <div className="field" key={key}>
+                    <span>{key === "unsure" ? "Not sure" : key[0].toUpperCase() + key.slice(1)}</span>
+                    <div className="row" style={{ gap: 10 }}>
+                      <button className="letter" aria-label={`fewer ${ty} ${key}`} onClick={() => setByType((b) => ({ ...b, [ty]: { ...b[ty], [key]: Math.max(0, b[ty][key] - 1) } }))}>−</button>
+                      <span className="mono" style={{ width: 30, textAlign: "center", fontWeight: 700 }}>{byType[ty][key]}</span>
+                      <button className="letter" aria-label={`more ${ty} ${key}`} onClick={() => setByType((b) => ({ ...b, [ty]: { ...b[ty], [key]: b[ty][key] + 1 } }))}>+</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )) : <>{counter("right", "Right")}{counter("wrong", "Wrong")}{counter("unsure", "Not sure")}</>}
             {(t.kind === "gmatclub_set" || t.kind === "di_set") && <PasteShare piece={piece} />}
           </div>
         )}
@@ -174,18 +195,20 @@ function PasteShare({ piece }: { piece: Piece }) {
   const [v, setV] = useState("");
   const [said, setSaid] = useState("");
   const save = async () => {
-    const url = v.trim();
-    if (!/^https?:\/\/(www\.)?gmatclub\.com\//i.test(url)) { setSaid("That isn't a GMAT Club link."); return; }
+    const raw = v.trim();
+    if (!raw) return;
+    const isLink = /^https?:\/\//i.test(raw);
     const topic = piece.task.topic ? listTopic(piece.task.topic) : null;
-    await record({ type: "shared", url, set: piece.taskId, topic, section: piece.section as Section });
+    // any site (GMAT Club, mba.com, gmatwithcj.com…), or a note of your own when there's no link
+    await record({ type: "shared", url: isLink ? raw : "", note: isLink ? undefined : raw.slice(0, 200), set: piece.taskId, topic, section: piece.section as Section });
     setV("");
     setSaid("Saved. It'll come back in a day or two.");
   };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <div className="tiny">Bookmark blocked? Paste a wrong one's link:</div>
+      <div className="tiny">Bookmark blocked? Paste a wrong one's link (any site), or write which one it was:</div>
       <div className="row">
-        <input value={v} onChange={(e) => setV(e.target.value)} placeholder="https://gmatclub.com/forum/…" onKeyDown={(e) => { if (e.key === "Enter") void save(); }}
+        <input value={v} onChange={(e) => setV(e.target.value)} placeholder="a link, or e.g. 'Starter Kit DI #14'" onKeyDown={(e) => { if (e.key === "Enter") void save(); }}
           style={{ flex: 1, height: 42, border: "1.5px solid var(--line-2)", borderRadius: 9, padding: "0 10px", font: "400 12px var(--mono)" }} />
         <button className="btn small outline" onClick={() => void save()}>Save</button>
       </div>

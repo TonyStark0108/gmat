@@ -22,7 +22,7 @@ export const TOOLS: ToolDef[] = [
     input_schema: { type: "object", properties: {
       section: { type: "string", enum: SECTIONS, description: "Only this section" },
       topic: { type: "string", description: "Only this topic, e.g. 'rates' or 'ds · percents'" },
-      state: { type: "string", enum: ["in review", "retired", "left", "all"], description: "Default: in review" },
+      state: { type: "string", enum: ["in review", "retired", "stubborn", "all"], description: "Default: in review" },
       limit: { type: "integer", description: "At most this many (default 25)" },
     }, additionalProperties: false },
   },
@@ -152,8 +152,8 @@ export function runTool(m: Model, name: string, input: Record<string, unknown>):
 function getErrors(m: Model, input: Record<string, unknown>): ToolOutcome {
   const sec = str(input.section), topic = str(input.topic)?.toLowerCase(), state = str(input.state) ?? "in review";
   const limit = int(input.limit, 25, 60);
-  const want = (it: Item) => state === "all" ? true : state === "retired" ? it.state === "retired" : state === "left" ? it.state === "movedon"
-    : ["review", "redo", "return"].includes(it.state);
+  const want = (it: Item) => state === "all" ? true : state === "retired" ? it.state === "retired" : state === "stubborn" ? it.state === "stubborn"
+    : ["review", "redo", "return", "stubborn"].includes(it.state);
   const rows = [...m.reviews.items.values()]
     .filter((it) => it.entered && it.firstMark !== "unknown" && want(it) && (!sec || it.section === sec) && (!topic || it.topic.toLowerCase().includes(topic) || topicName(it.topic).toLowerCase().includes(topic)))
     .sort((a, b) => (a.setDay < b.setDay ? 1 : -1)).slice(0, limit).map(describe);

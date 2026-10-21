@@ -62,7 +62,16 @@ test("phases 2 and 3, end to end", async () => {
   await snap(page, "Here they are: your letter beside the right one, where the explanation is, and “My book says…” for every mark.");
   await page.keyboard.press("Enter");
   if (await page.getByText("Why each one went wrong.").isVisible()) {
-    await snap(page, "A reason for each one that was wrong the first time (1–4 on the keyboard), and an optional line that becomes a card.");
+    await snap(page, "A reason for each one that was wrong, or right but not sure (1–4 on the keyboard), and an optional line that becomes a card.");
+    // audit D15: some reasons now, the rest later; home shows them as unfinished
+    await page.keyboard.press("2");
+    await page.getByRole("button", { name: "Save these, finish later" }).click();
+    await settled(page);
+    await expect(card(page).locator(".t")).toHaveText("The review: reasons to finish");
+    await expect(card(page)).toContainText(/1 of \d+ reasons in/);
+    await snap(page, "Saved one reason, the rest later: home shows the reasons as unfinished, not as a finished review.");
+    await page.keyboard.press("Enter");
+    await expect(page.getByText("Why each one went wrong.")).toBeVisible();
     for (let i = 0; i < set.items.length; i++) await page.keyboard.press("2");
     await page.keyboard.press("Enter");
   }
@@ -171,6 +180,8 @@ test("phases 2 and 3, end to end", async () => {
   await expect(page.getByText("The Sunday note")).toBeVisible();
   await expect(page.getByText(/^Week 2 is (done|closed)\./)).toBeVisible();
   await snap(page, "The Sunday note, inside the app: the week in a line, next week's shape, and a Share button.");
+  // audit E22: one primary action on home; the note's buttons are secondary
+  await expect(page.locator(".screen .btn:not(.ghost):not(.outline)")).toHaveCount(1);
   await page.getByRole("button", { name: "OK" }).click();
 
   // ------------------------------------------------------------------ progress and what to work on
@@ -189,14 +200,26 @@ test("phases 2 and 3, end to end", async () => {
   await snap(page, "The mock: mba.com with “Didn't load” (it moves to tomorrow), Move it, and the scores when you're back.");
   for (const [k, v] of [["total", "625"], ["quant", "80"], ["verbal", "84"], ["di", "76"]]) await page.getByLabel(k).fill(v);
   await page.getByRole("button", { name: "Save the scores" }).click();
-  await expect(page.getByText(/On track for this point in the plan\.|Further from 665/)).toBeVisible();
+  await expect(page.getByText(/On track for this point in the plan\.|Further from \d{3}/)).toBeVisible();
   await snap(page, "The verdict against that week's own gap (50 points at week 8), then up to ten misses tagged.");
 
   // ------------------------------------------------------------------ settings
   setStep("11 · Settings");
   await page.goto("/#/settings");
   await expect(page.getByText("Send to GMAT app").first()).toBeVisible();
-  await snap(page, "Settings: dates and times, the booked test date (only once booked), focus and break, cards, the bookmark, backup.");
+  await expect(page.getByText(/Projected with your slots and rides as they are:/)).toBeVisible();     // audit C9
+  await expect(page.locator(".field", { hasText: "Target score" }).locator("select")).toHaveValue("685");   // audit A1
+  await snap(page, "Settings: your target (685), the projected finish with your real slots, dates and times, Exams 3–6, harder lists, the tutor, backup.");
+
+  setStep("12a · Log a question from another source (audit B6)");
+  await page.goto("/#/log");
+  await page.locator(".field", { hasText: "Source" }).locator("select").selectOption("dir_online");
+  await page.getByRole("button", { name: "TA", exact: true }).click();
+  await page.getByPlaceholder("e.g. DI Review online #212").fill("DI Review online #212");
+  await page.getByPlaceholder("2:10").fill("3:10");
+  await page.getByRole("button", { name: "Wrong", exact: true }).click();
+  await expect(page.getByText(/DI Review online bank · TA · DI Review online #212 · wrong/)).toBeVisible();
+  await snap(page, "A question from the online banks: type, time, right or wrong. It joins the error log and comes back as a redo.");
 
   // ------------------------------------------------------------------ months later: back, booking, the end game
   setStep("12 · Months later: the warmest welcome, and the booking card at the book-by date");
@@ -205,6 +228,11 @@ test("phases 2 and 3, end to end", async () => {
   await page.goto("/#/");
   await jumpTo(ctx, page, at("2027-07-02T19:00"));
   await expect(card(page).locator(".t")).toHaveText("Back. That's the whole game.");
+  // the weekly date check (audit C12) comes first: one note at a time
+  if (await page.getByText("Two ways to go.").isVisible()) {
+    await snap(page, "Months away from the app: the weekly date check noticed, and offers moving the finish date first.");
+    await page.getByRole("button", { name: "Decide later" }).click();
+  }
   await expect(page.getByText(/It's your book-by date\./)).toBeVisible();
   await expect(page.locator("body")).not.toContainText(/missed|behind|overdue|days left/i);
   await snap(page, "After a long gap: nothing about the gap, a short cards warm-up, and (at the book-by date) the booking card.");
@@ -224,7 +252,7 @@ test("phases 2 and 3, end to end", async () => {
   await snap(page, "Test day.");
   await jumpTo(ctx, page, at("2027-07-25T10:00"));
   await expect(page.getByText("How did it go?")).toBeVisible();
-  await page.getByPlaceholder("205–805").fill("675");
+  await page.getByPlaceholder("205–805").fill("695");
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText("That's it. Well done.")).toBeVisible();
   await snap(page, "After the test: the score if you want to give it, then the app goes quiet. Your data stays.");

@@ -8,7 +8,6 @@ import type { ExtraSpec } from "./events";
 import { inWords } from "./grid";
 import type { Item, SetReview } from "./review";
 import type { Settings } from "./settings";
-import { TARGET } from "./settings";
 
 interface Rule {
   week: number; section: string; guide_link: string | null; careless_max_share?: number | null; careless_per_section_max?: number;
@@ -94,7 +93,7 @@ const CARELESS_VIDEO = "w01-quant-01";    // "Why careless errors cost so much"
 const CR_APPROACH_VIDEO = "w01-cr-01";    // "How to approach CR"
 
 export function closeOf(content: Content, s: SetReview, items: Item[], linesWritten: number, settings: Settings, today: string, nextWeek: string): CloseSummary {
-  const first = items.filter((it) => it.needsTag);
+  const first = items.filter((it) => it.firstMark === "wrong");
   const retried = first.filter((it) => it.attempts > 0);
   const fixed = retried.filter((it) => it.state === "return" || it.state === "retired");
   const out: CloseSummary = { diagnosis: null, careless: null, scheduled: null, cards: null, add: null, rc: null };
@@ -133,14 +132,14 @@ export function closeOf(content: Content, s: SetReview, items: Item[], linesWrit
   // what got scheduled
   const returns = items.filter((it) => it.state === "return").length;
   const redos = items.filter((it) => it.state === "redo");
-  const moved = items.filter((it) => it.state === "movedon").length;
+  const moved = items.filter((it) => it.state === "stubborn").length;
   const bits: string[] = [];
   if (returns) bits.push(`${inWords(returns)} ${returns === 1 ? "comes" : "come"} back in 2–3 weeks`);
   if (redos.length) {
     const when = s.group === "Q" ? nextDeskSlot(parseYmd(today), settings, 7)?.day ?? plusDays(today, 1) : plusDays(today, 1);
     bits.push(`${inWords(redos.length).toLowerCase()} ${redos.length === 1 ? "tries" : "try"} again on ${DAY_NAMES[parseYmd(when).getDay()]}`);
   }
-  if (moved) bits.push(`${inWords(moved).toLowerCase()} had three goes and is left`);
+  if (moved) bits.push(`${inWords(moved).toLowerCase()} joined the stubborn ones, back in ten days`);
   if (bits.length) out.scheduled = `${bits.join("; ")}.`.replace(/^./, (c) => c.toUpperCase());
   if (linesWritten) out.cards = `${inWords(linesWritten)} ${linesWritten === 1 ? "line" : "lines"} went to your cards.`;
   return out;
@@ -153,13 +152,16 @@ export function mockGap(content: Content, week: number): [number, number] | null
   return r?.gap_below_665 ?? null;
 }
 
-/** Each official mock is judged against its own week's gap: 50 at week 8, down to 20 at week 12. */
-export function mockVerdict(content: Content, week: number, total: number): { onTrack: boolean; line: string } {
+/**
+ * Each official mock is judged against its own week's gap below your target: 50 at week 8, down to
+ * 20 at week 12 (the plan's guides give the gaps; they're measured from your target, not a fixed 665).
+ */
+export function mockVerdict(content: Content, week: number, total: number, target: number): { onTrack: boolean; line: string } {
   const gap = mockGap(content, week);
-  const below = TARGET - total;
-  if (below <= 0) return { onTrack: true, line: `${total}. At or above ${TARGET}.` };
+  const below = target - total;
+  if (below <= 0) return { onTrack: true, line: `${total}. At or above your target of ${target}.` };
   if (!gap || below <= gap[1]) return { onTrack: true, line: "On track for this point in the plan." };
-  return { onTrack: false, line: "Further from 665 than the plan expects here. A rebuild week before the next official mock uses it better." };
+  return { onTrack: false, line: `Further from ${target} than the plan expects here. A rebuild week before the next official mock uses it better.` };
 }
 
 // ---------------------------------------------------------------- "Need help?" chips

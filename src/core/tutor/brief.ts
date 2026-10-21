@@ -19,7 +19,7 @@ export function studentBrief(m: Model): string {
   const L: string[] = [];
   const level = LEVELS.find((x) => x.n === m.level);
   L.push("## Dates and time");
-  L.push(`- Today: ${DAY_NAMES[parseYmd(today).getDay()]} ${longDate(today)}.`);
+  L.push(`- Today: ${DAY_NAMES[parseYmd(today).getDay()]} ${longDate(today)}. Target: ${s.target}.`);
   L.push(`- Plan start ${longDate(s.startDate)}; finish date ${s.finishDate ? longDate(s.finishDate) : s.agreedFinish ? `${longDate(s.agreedFinish)} (worked out from the time)` : "not set"}; book-by ${longDate(s.bookBy)}; hard stop ${longDate(s.hardStop)}.`);
   L.push(`- Test: ${s.testDate ? `booked for ${longDate(s.testDate)}` : "not booked"}.`);
   L.push(`- Desk time: Saturday ${s.saturday.enabled ? `${s.saturday.start}–${s.saturday.end}` : "off"}; mornings ${s.mornings.days.map((x) => DAY_NAMES[x].slice(0, 3)).join("/") || "none"} ${s.mornings.start}–${s.mornings.end}. Bus rides about ${m.ride} minutes on weekdays (reading, videos, CR and cards only; no quant on the bus).`);
@@ -30,7 +30,7 @@ export function studentBrief(m: Model): string {
   const left = (m.week?.chips ?? []).filter((c) => !d.done.has(c.pieceId)).map((c) => m.byId.get(c.pieceId)?.task.title).filter(Boolean);
   L.push(`- ${m.pct}% of the plan done, ${Math.floor(d.totalMinutes / 60)} hours logged, ${d.counted.size} weeks that counted, ${level ? `Level ${level.n} (${level.name})` : "no level yet"}.`);
   if (m.week) L.push(`- This is study week ${weekNumber(m.weekStart, s.startDate)}. Left this week: ${left.length ? left.slice(0, 12).join("; ") : "nothing"}${st && st.reviews.some((r) => r.status !== "done") ? `; ${st.reviews.filter((r) => r.status !== "done").length} set reviews` : ""}.`);
-  L.push(`- Cards due now: ${m.cardsDue}. Errors: ${m.reviews.retired} retired, ${m.reviews.inReview} in review, ${m.reviews.movedOn} left after three goes.`);
+  L.push(`- Cards due now: ${m.cardsDue}. Errors: ${m.reviews.retired} retired, ${m.reviews.inReview} in review, ${m.reviews.stubborn} stubborn ones (missed three times, still coming back).`);
   if (m.phase !== "plan") L.push(`- End game: ${m.phase}.`);
 
   L.push("", "## First-try accuracy by section (desk sets)");

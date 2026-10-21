@@ -46,7 +46,7 @@ export type EventBody =
   | { type: "rc.place"; piece: string; passage: number; stage: "read" | "prompt" | "questions"; q: number }
   | { type: "video.progress"; piece: string; seconds: number; duration: number }
   | { type: "drill"; piece: string; go: number; right: number; total: number; seconds: number; met: boolean }
-  | { type: "outside"; piece: string; right?: number; wrong?: number; unsure?: number; scores?: Record<string, number> }
+  | { type: "outside"; piece: string; right?: number; wrong?: number; unsure?: number; scores?: Record<string, number>; byType?: Record<string, { right: number; wrong: number; unsure: number }> }
   | { type: "piece.submitted"; piece: string; wrongOrUnsure: number; answered: number }
   | { type: "piece.done"; piece: string }
   | { type: "line"; source: string; text: string; front?: string; topic?: string; section?: Section }
@@ -86,7 +86,8 @@ export type EventBody =
   // ---- extras, sharing in, links
   | { type: "extra.added"; extra: ExtraSpec }
   | { type: "offer"; offer: string; answer: "add" | "notnow" | "yes" | "no" }
-  | { type: "shared"; url: string; set: string | null; topic: string | null; section: Section }
+  | { type: "shared"; url: string; set: string | null; topic: string | null; section: Section; note?: string }
+  | { type: "qlog"; source: string; qtype: string; topic?: string | null; result: "right" | "wrong"; unsure: boolean; seconds?: number | null; ref?: string; url?: string }
   | { type: "link.dead"; url: string; why: string }
   | { type: "cr.swap"; set: string; n: number; url: string }
   | { type: "video.check"; youtubeId: string; status: number }

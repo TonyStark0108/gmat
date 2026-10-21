@@ -11,7 +11,7 @@ import {
   ADAPT_MIN_ATTEMPTS, difficultyFor, extraTopic, leadingTag, listsFor, sectionStats, topicStats, topicVideo, topupHistory,
   weakestSection, type AdaptSection, type TopicStat, type TopupOffer,
 } from "./adapt";
-import { topicName } from "./topics";
+import { listTopic, topicName } from "./topics";
 import { weekNumber } from "./sunday";
 import type { WeekPlan } from "./week";
 
@@ -64,8 +64,17 @@ export function buildAdapt(content: Content, reviews: ReviewModel, d: Derived, b
     return c[0]?.topic ?? null;
   };
 
+  const planWeekOf = (ws: string) => Math.max(0, ...(d.weeks.get(ws)?.chips ?? []).map((c) => byId.get(c.pieceId)?.planWeek ?? 0));
   const listSpec = (id: string, kind: ExtraSpec["kind"], ws: string, topic: string, section: Section, title: string, minutes: number, count: number, reason?: string): ExtraSpec | null => {
-    const urls = listsFor(content, topic, difficultyFor(stats.get(topic))).slice(0, 2);
+    const diff = difficultyFor(stats.get(topic));
+    let urls = listsFor(content, topic, diff).slice(0, 2);
+    // from plan week 8, quant and DS practice uses the harder lists you've pasted in: 655–705 first,
+    // 705+ first once the topic is "hard" (80%+ on two separate sets)
+    const hard = (d.settings.hardLists ?? {})[listTopic(topic)];
+    if (planWeekOf(ws) >= 8 && (section === "quant" || section === "di") && hard && (hard.mid || hard.top)) {
+      const mid = hard.mid ? [{ label: "655–705 list", url: hard.mid }] : [], top = hard.top ? [{ label: "705+ list", url: hard.top }] : [];
+      urls = diff === "hard" ? [...top, ...mid] : [...mid, ...top];
+    }
     if (!urls.length) return null;
     return { id, kind, week: ws, section, topic, title, minutes, open: { type: "list", urls, count }, reason };
   };
@@ -120,7 +129,7 @@ export function buildAdapt(content: Content, reviews: ReviewModel, d: Derived, b
       const hist = topupHistory(d, weekStartOf(today), today);
       const groups = new Map<string, { items: { line?: string; ts: number; unsureOnly: boolean }[]; topic: string; section: Section; tag: Tag | null }>();
       for (const it of reviews.items.values()) {
-        if (!it.entered || it.source === "rc" || it.firstMark === "unknown" || !["review", "redo", "return"].includes(it.state)) continue;
+        if (!it.entered || it.firstMark === "unknown" || !["review", "redo", "return", "stubborn"].includes(it.state)) continue;
         const key = `${it.section}|${it.topic}|${it.tag ?? ""}`;
         const g = groups.get(key) ?? { items: [], topic: it.topic, section: it.section, tag: it.tag ?? null };
         g.items.push({ line: it.line, ts: d.tags.get(it.id)?.ts ?? 0, unsureOnly: it.firstMark === "right" });

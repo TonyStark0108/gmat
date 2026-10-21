@@ -86,10 +86,11 @@ export function weekCapacity(weekStart: string, s: Settings, busMinutes?: number
     rawDesk += c.desk;
     rawBus += c.bus;
   }
-  // The 15-hour ceiling applies to the whole week; rides give way first.
-  if (rawDesk + rawBus > WEEK_CAP_MIN) rawBus = Math.max(0, WEEK_CAP_MIN - rawDesk);
-  rawDesk = Math.min(rawDesk, WEEK_CAP_MIN);
-  return { desk: rawDesk * PLAN_SHARE, bus: rawBus * PLAN_SHARE, rawDesk, rawBus };
+  // Up to 15 hours a week can be plan work: the ceiling applies after the 85% share; rides give way first.
+  let desk = rawDesk * PLAN_SHARE, bus = rawBus * PLAN_SHARE;
+  if (desk + bus > WEEK_CAP_MIN) bus = Math.max(0, WEEK_CAP_MIN - desk);
+  desk = Math.min(desk, WEEK_CAP_MIN);
+  return { desk, bus, rawDesk, rawBus };
 }
 
 export type SlotKind = "saturday" | "morning";

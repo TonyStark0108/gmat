@@ -81,10 +81,13 @@ describe("test 5 · pieces", () => {
 });
 
 describe("test 10 · dates", () => {
-  it("never plans above 15 hours a week, however much time you give it", () => {
+  it("never plans above 15 hours a week, however much time you give it; and all 15 can be plan work (audit C10)", () => {
     const s = settings({ busMinutesPerWeekday: 400, mornings: { days: [1, 2, 3, 4, 5], start: "06:00", end: "09:00" } });
     const cap = weekCapacity("2026-12-07", s);
-    expect(cap.rawDesk + cap.rawBus).toBeLessThanOrEqual(WEEK_CAP_MIN);
+    expect(cap.desk + cap.bus).toBe(WEEK_CAP_MIN);                 // the cap is on plan work, after the 85% share
+    // with the usual slots the 85% share is under the cap, so nothing changes there
+    const usual = weekCapacity("2026-12-07", settings());
+    expect(usual.desk + usual.bus).toBeCloseTo((usual.rawDesk + usual.rawBus) * 0.85, 5);
   });
 
   it("changing a date re-spreads only the work that's left", () => {

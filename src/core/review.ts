@@ -6,6 +6,7 @@
 // after three misses. Everything here is computed from the event log; nothing is stored twice.
 
 import { dayCapacity, daysBetween, plusDays, weekStartOf } from "./calendar";
+import { logTopic, qtypeSection, SOURCE_NAMES } from "./qlog";
 import type { Settings } from "./settings";
 import { pagesFor, type BookId, type Content, type Section, type Task } from "./content";
 import type { Answer, Tag } from "./events";
@@ -14,8 +15,8 @@ import { groupOf, type Group, type Piece } from "./pieces";
 import type { Derived } from "./state";
 import { bookTopic } from "./topics";
 
-export type ItemState = "fine" | "review" | "redo" | "return" | "retired" | "movedon" | "done";
-export type ItemSource = "book" | "rc" | "cr" | "share";
+export type ItemState = "fine" | "review" | "redo" | "return" | "retired" | "stubborn" | "done";
+export type ItemSource = "book" | "rc" | "cr" | "share" | "log";
 
 export interface Item {
   id: string;
@@ -48,7 +49,7 @@ export interface Item {
   rightRedoDay: string | null;
   lastDay: string | null;
   retiredDay: string | null;
-  movedOnDay: string | null;
+  stubbornDay: string | null;   // when it first joined the stubborn queue
   needsTag: boolean;              // wrong on the first try: the review asks why
   tag?: Tag;
   line?: string;
@@ -80,7 +81,7 @@ export interface ReviewModel {
   items: Map<string, Item>;
   retired: number;
   inReview: number;
-  movedOn: number;
+  stubborn: number;
   errorsSoFar: number;
   openMixed: { id: string; items: Item[] } | null;
 }
@@ -89,7 +90,8 @@ export const REDO_MIN_GAP = 1;
 export const RETURN_AFTER = 14;
 export const RETIRE_GAP = 7;
 export const LAPSE_AFTER = 14;
-export const MOVE_ON_AT = 3;
+export const STUBBORN_AT = 3;     // three misses: the question joins the stubborn queue (it never leaves)
+export const STUBBORN_GAP = 10;   // and comes back ten days later, in its own session
 export const MIXED_SIZE = 8;
 
 const SET_KINDS = new Set(["og_set", "rc_section", "cr_set", "di_set"]);
@@ -138,11 +140,11 @@ const markOf = (value: Answer, key: Answer | undefined): Item["firstMark"] => {
   return m === "right" ? "right" : m === "unknown" ? "unknown" : "wrong";
 };
 
-function blank(base: Omit<Item, "key" | "firstMark" | "entered" | "state" | "misses" | "dueFrom" | "rightRedoDay" | "lastDay" | "retiredDay" | "movedOnDay" | "needsTag" | "attempts">, key: Answer | undefined): Item {
+function blank(base: Omit<Item, "key" | "firstMark" | "entered" | "state" | "misses" | "dueFrom" | "rightRedoDay" | "lastDay" | "retiredDay" | "stubbornDay" | "needsTag" | "attempts">, key: Answer | undefined): Item {
   const firstMark = markOf(base.first, key);
   const entered = firstMark !== "right" || base.firstUnsure;
   return { ...base, key, firstMark, entered, state: entered ? "review" : "fine", misses: firstMark === "wrong" ? 1 : 0, dueFrom: null,
-    rightRedoDay: null, lastDay: null, retiredDay: null, movedOnDay: null, needsTag: firstMark === "wrong", attempts: 0 };
+    rightRedoDay: null, lastDay: null, retiredDay: null, stubbornDay: null, needsTag: firstMark === "wrong" || base.firstUnsure, attempts: 0 };
 }
 
 /** Every question of a logged set, with its first answer and key. */
@@ -229,24 +231,24 @@ function ladder(it: Item, d: Derived, setReview: { status: SetStatus; doneDay: s
   const tag = d.tags.get(it.id);
   if (tag) { it.tag = tag.tag; it.line = tag.line; }
   if (setReview) it.dueFrom = setReview.windowFrom;
-  if (it.source === "rc") {
-    // single reading questions are never redone: the review is the end of them
-    if (setReview?.status === "done") it.state = "done";
-    return;
-  }
+  // reading questions follow the same ladder as everything else (redone one by one, in the reader)
   const atts = (d.attempts.get(it.id) ?? []).filter((a) => a.attempt !== "last");
   for (const a of atts) {
     const right = a.right ?? (it.key !== undefined && markOne(a.value, it.key as string | number[]) === "right");
     it.attempts++;
     it.lastDay = a.day;
-    if (it.state === "review" || it.state === "redo") {
+    const miss = () => {
+      it.misses++;
+      if (it.misses >= STUBBORN_AT) { it.state = "stubborn"; it.stubbornDay ??= a.day; it.dueFrom = plusDays(a.day, STUBBORN_GAP); }
+      else { it.state = "redo"; it.dueFrom = plusDays(a.day, REDO_MIN_GAP); }
+    };
+    if (it.state === "review" || it.state === "redo" || it.state === "stubborn") {
       if (right) { it.state = "return"; it.rightRedoDay = a.day; it.dueFrom = plusDays(a.day, RETURN_AFTER); }
-      else { it.misses++; it.state = it.misses >= MOVE_ON_AT ? "movedon" : "redo"; it.dueFrom = plusDays(a.day, REDO_MIN_GAP); }
+      else miss();
     } else if (it.state === "return") {
       if (right && it.rightRedoDay && daysBetween(it.rightRedoDay, a.day) >= RETIRE_GAP) { it.state = "retired"; it.retiredDay = a.day; }
-      else if (!right) { it.misses++; it.state = it.misses >= MOVE_ON_AT ? "movedon" : "redo"; it.dueFrom = plusDays(a.day, REDO_MIN_GAP); }
+      else if (!right) miss();
     }
-    if (it.state === "movedon") { it.movedOnDay = a.day; break; }
     if (it.state === "retired") break;
   }
   if (it.state === "review" && setReview) {
@@ -302,28 +304,48 @@ export function buildReviews(inp: ReviewInput): ReviewModel {
     });
   }
 
-  // Questions you sent in from GMAT Club: they come back as redos, and only count toward the topic.
+  // Questions you sent in (any site, or a note of your own): they come back as redos.
   for (const s of d.shared) {
-    const id = `share|${s.url}`;
+    const id = `share|${s.url || s.id}`;
     if (items.has(id)) continue;
+    const site = s.url ? (s.url.match(/^https?:\/\/(?:www\.)?([^/]+)/)?.[1] ?? "the web") : null;
     const it: Item = {
       id, review: "share", taskId: s.set ?? "share", pieceId: s.set ?? "share", source: "share", section: s.section, group: groupOf(s.section),
-      topic: s.topic ?? "mixed", q: s.url, url: s.url, label: "The question you sent in (GMAT Club)", explanation: "the thread has the explanations",
+      topic: s.topic ?? "mixed", q: s.url || s.id, url: s.url || undefined,
+      label: s.url ? `The question you sent in (${site})` : `Your note: ${s.note ?? "a question"}`, explanation: s.url ? "the page has the explanation" : null,
       first: null, firstUnsure: false, firstMs: null, setDay: s.day,
       key: undefined, firstMark: "wrong", entered: true, state: "redo", misses: 1, dueFrom: windowAfter(s.day, d), rightRedoDay: null,
-      lastDay: null, retiredDay: null, movedOnDay: null, needsTag: false, attempts: 0,
+      lastDay: null, retiredDay: null, stubbornDay: null, needsTag: false, attempts: 0,
     };
     ladder(it, d, null);
     items.set(id, it);
   }
 
-  let retired = 0, inReview = 0, movedOn = 0, errorsSoFar = 0;
+  // Questions logged from other official sources (the online question banks, Official Practice Questions):
+  // right or wrong as you report it, with time and type; wrong and not-sure ones join the redo ladder.
+  for (const q of d.qlogs) {
+    const id = `log|${q.id}`;
+    const section = qtypeSection(q.qtype);
+    const it: Item = {
+      id, review: "log", taskId: "log", pieceId: "log", source: "log", section, group: groupOf(section),
+      topic: logTopic(q.qtype, q.topic), q: q.ref || q.id, url: q.url || undefined,
+      label: `${SOURCE_NAMES[q.source] ?? q.source}${q.ref ? `, ${q.ref}` : ""}`, explanation: q.url ? "the page has the explanation" : "the source's own explanation",
+      first: null, firstUnsure: q.unsure, firstMs: q.seconds ? q.seconds * 1000 : null, setDay: q.day,
+      key: undefined, firstMark: q.result === "right" ? "right" : "wrong", entered: q.result === "wrong" || q.unsure,
+      state: q.result === "wrong" || q.unsure ? "redo" : "fine", misses: q.result === "wrong" ? 1 : 0, dueFrom: windowAfter(q.day, d),
+      rightRedoDay: null, lastDay: null, retiredDay: null, stubbornDay: null, needsTag: q.result === "wrong" || q.unsure, attempts: 0,
+    };
+    ladder(it, d, null);
+    items.set(id, it);
+  }
+
+  let retired = 0, inReview = 0, stubborn = 0, errorsSoFar = 0;
   for (const it of items.values()) {
     // a question whose answer isn't known yet (a CR set before its review) isn't an error yet
-    if (!it.entered || it.source === "rc" || it.firstMark === "unknown") continue;
+    if (!it.entered || it.firstMark === "unknown") continue;
     errorsSoFar++;
     if (it.state === "retired") retired++;
-    else if (it.state === "movedon") movedOn++;
+    else if (it.state === "stubborn") stubborn++;
     else if (it.state === "review" || it.state === "redo" || it.state === "return") inReview++;
   }
 
@@ -335,12 +357,12 @@ export function buildReviews(inp: ReviewInput): ReviewModel {
     if (its.length) openMixed = { id, items: its };
   }
 
-  return { sets, setById: new Map(sets.map((s) => [s.id, s])), items, retired, inReview, movedOn, errorsSoFar, openMixed };
+  return { sets, setById: new Map(sets.map((s) => [s.id, s])), items, retired, inReview, stubborn, errorsSoFar, openMixed };
 }
 
 /** Is a redo or return free to come up today? (After a late night, today's newly due ones wait a day.) */
 export function dueToday(it: Item, d: Derived, today: string): boolean {
-  if (!it.dueFrom || (it.state !== "redo" && it.state !== "return")) return false;
+  if (!it.dueFrom || (it.state !== "redo" && it.state !== "return" && it.state !== "stubborn")) return false;
   if (it.dueFrom > today) return false;
   if (it.dueFrom === today && d.lateSessions.has(plusDays(today, -1))) return false;
   return true;
@@ -359,10 +381,11 @@ export function fitsItem(it: Item, f: MixedFilter): boolean {
  * Returns and second tries, grouped into a session of up to eight. No two neighbours share a topic
  * where that can be helped; weaker topics come a little more often (spec: Mixed review chips).
  */
-export function mixedSession(m: ReviewModel, d: Derived, today: string, f: MixedFilter, weight: (topic: string) => number = () => 1): Item[] {
+export function mixedSession(m: ReviewModel, d: Derived, today: string, f: MixedFilter, weight: (topic: string) => number = () => 1, stubborn = false): Item[] {
   const busy = new Set<string>();
   for (const [id, r] of d.reviewStarted) if (id.startsWith("mixed:") && !d.reviewDone.has(id)) r.items.forEach((x) => busy.add(x));
-  const due = [...m.items.values()].filter((it) => !busy.has(it.id) && dueToday(it, d, today) && fitsItem(it, f));
+  // the stubborn ones get their own session, so they don't crowd the regular redos
+  const due = [...m.items.values()].filter((it) => !busy.has(it.id) && dueToday(it, d, today) && fitsItem(it, f) && (it.state === "stubborn") === stubborn);
   due.sort((a, b) => (weight(b.topic) - weight(a.topic)) || (a.dueFrom! < b.dueFrom! ? -1 : a.dueFrom! > b.dueFrom! ? 1 : 0));
   const take = due.slice(0, MIXED_SIZE);
   // spread the topics so neighbours differ

@@ -32,9 +32,30 @@ export function groupOf(section: Section): Group {
   return section === "quant" || section === "di" ? "Q" : section === "rc" || section === "cr" ? "V" : "O";
 }
 
-/** Tasks that count as the plan: every plan task, except the week-1 practice run unless it's switched on. */
+/** Official Practice Exams 3–6 take the plan's later test slots, in this order. */
+export const EXAM_SLOTS: Record<number, number> = { 9: 3, 10: 4, 12: 5, 13: 6 };
+
+/**
+ * Tasks that count as the plan: every plan task, except the week-1 practice run unless it's switched on.
+ * With Exams 3–6 bought, they replace the GMAT Club timed-section stand-ins in weeks 9, 10, 12 and 13
+ * (the stand-ins come back if you mark them not bought). A practice run is a non-official timed test
+ * unless you choose Official Exam 1 for it.
+ */
 export function planTasks(content: Content, settings: Settings): Task[] {
-  return content.plan.tasks.filter((t) => t.optional !== "setting" || (t.setting === "practice_run_week1" && settings.practiceRun));
+  const standIn = content.plan.tasks.find((t) => t.kind === "mock" && t.pointer.type === "timed_sections");
+  return content.plan.tasks
+    .filter((t) => t.optional !== "setting" || (t.setting === "practice_run_week1" && settings.practiceRun))
+    .map((t) => {
+      if (t.kind !== "mock") return t;
+      const exam = EXAM_SLOTS[t.plan_week];
+      if (exam && t.pointer.type === "timed_sections" && settings.exams36 !== "not bought") {
+        return { ...t, title: `Official Practice Exam ${exam}, fresh`, pointer: { type: "official_mock", exam, stand_in: t.pointer } };
+      }
+      if (t.pointer.practice_run && settings.practiceRunKind !== "official" && standIn) {
+        return { ...t, title: "Practice run: timed sections (not an official exam)", pointer: { ...standIn.pointer, practice_run: true } };
+      }
+      return t;
+    });
 }
 
 function busRules(t: Task, s: Settings): { deskOnly: boolean; busOk: boolean; busOnly?: boolean } {

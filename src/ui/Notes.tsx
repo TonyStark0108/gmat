@@ -8,7 +8,7 @@ import { useApp } from "../app/store";
 import { daysBetween, longDate, plusDays, weekStartOf } from "../core/calendar";
 import { keepDatePlan } from "../core/life";
 import { askLetGo } from "../core/life";
-import { bookingCard } from "../core/mocks";
+import { bookingCard, week8Checkpoint } from "../core/mocks";
 import { LEVELS } from "../core/progress";
 import { noteWeek, sundayLines, weekEndMs, weekNumber } from "../core/sunday";
 import { morningsSkippedTwice } from "../core/life";
@@ -42,6 +42,25 @@ export function NoteStack() {
     );
   }
 
+  // 1b. the week-8 checkpoint: Exam 1 more than 60 below the target proposes a specific extension
+  const cp = week8Checkpoint(m.mocks, s);
+  if (cp && !d.offers.has(cp.id)) {
+    return (
+      <div className="note">
+        <div className="eyebrow">After Official Exam 1</div>
+        <div style={{ fontSize: 19 }}>Exam 1 came in at {cp.total}. Your target is {cp.target}, so this is the point to give the plan more room rather than carry on as if nothing changed.</div>
+        <div style={{ fontSize: 17 }}>The proposal: {cp.weeks} more weeks. Finish {longDate(cp.finish)}; book-by {longDate(cp.bookBy)}. The extra weeks go to your weakest areas, more official practice and the tutor.{cp.limited ? " (That's as far as it goes while a retake still fits before your hard stop.)" : ""}</div>
+        <div className="row wrap">
+          <button className="btn small outline" onClick={async () => {
+            await record({ type: "offer", offer: cp.id, answer: "yes" });
+            await setSetting({ finishDate: cp.finish, agreedFinish: cp.finish, bookBy: cp.bookBy });
+          }}>Add {cp.weeks} weeks</button>
+          <button className="btn small ghost" onClick={() => void record({ type: "offer", offer: cp.id, answer: "no" })}>Keep the dates</button>
+        </div>
+      </div>
+    );
+  }
+
   // 2. the date check, when the finish date stops working
   const check = [...d.datechecks].reverse().find((x) => !x.choice);
   const answered = check && d.datechecks.some((x) => x.choice && x.ts > check.ts);
@@ -57,10 +76,10 @@ export function NoteStack() {
 
   // 5. the weekly backup
   const backup = <BackupNote />;
-  const due = !d.lastBackup || now.getTime() - d.lastBackup > 6 * 86_400_000;
+  const due = !d.lastBackup || now.getTime() - d.lastBackup > 30 * 3_600_000;
   const sundayish = now.getDay() === 0 || now.getDay() === 1;
-  const offsite = d.lastBackup && (!d.offsiteAt || d.offsiteAt < d.lastBackup) && now.getTime() - d.lastBackup < 7 * 86_400_000;
-  if ((due && sundayish) || offsite) return backup;
+  const offsite = sundayish && d.lastBackup && (!d.offsiteAt || now.getTime() - d.offsiteAt > 6 * 86_400_000) && now.getTime() - d.lastBackup < 7 * 86_400_000;
+  if (due || offsite) return backup;
 
   // 6. a task skipped in three different weeks: keep it, or let it go?
   const t = askLetGo(d, (pid) => m.byId.get(pid)?.taskId);
@@ -70,7 +89,7 @@ export function NoteStack() {
       <div className="note">
         <div style={{ fontSize: 18 }}>{title}: keep this, or let it go?</div>
         <div className="row">
-          <button className="btn small" style={{ flex: 1 }} onClick={() => void record({ type: "letgo", task: t, keep: true })}>Keep it</button>
+          <button className="btn small outline" style={{ flex: 1 }} onClick={() => void record({ type: "letgo", task: t, keep: true })}>Keep it</button>
           <button className="btn ghost small" onClick={() => void record({ type: "letgo", task: t, keep: false })}>Let it go</button>
         </div>
       </div>
@@ -88,7 +107,7 @@ export function NoteStack() {
         <div style={{ fontSize: 18 }}>{p.task.title}</div>
         <div className="row">
           {p.task.pointer.url && <button className="btn small outline" onClick={() => window.open(p.task.pointer.url, "_blank", "noopener")}>Open the page ↗</button>}
-          <button className="btn small" onClick={async () => { await record({ type: "admin", piece: pid, answer: "done" }); }}>Done</button>
+          <button className="btn small outline" onClick={async () => { await record({ type: "admin", piece: pid, answer: "done" }); }}>Done</button>
           <button className="btn ghost small" onClick={() => void record({ type: "admin", piece: pid, answer: "not now" })}>Not now</button>
         </div>
       </div>
@@ -117,7 +136,7 @@ function DateCheckNote() {
       <div className="eyebrow">Your finish date</div>
       <div style={{ fontSize: 21 }}>Two ways to go.</div>
       {check.projected && (
-        <button className="btn small" onClick={() => void choose("move")}>Move the finish date to {longDate(check.projected)}</button>
+        <button className="btn small outline" onClick={() => void choose("move")}>Move the finish date to {longDate(check.projected)}</button>
       )}
       {check.result === "risk" && plan && check.target && (
         <button className="btn small outline" onClick={() => void choose("keep")}>Keep {longDate(check.target)}: {plan.words}</button>
@@ -145,11 +164,11 @@ function BookingNote({ why, suggest }: { why: "ready" | "bookby"; suggest: strin
       {open ? (
         <div className="row">
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          <button className="btn small" onClick={() => void record({ type: "booking", answer: "booked", date })}>That's my test date</button>
+          <button className="btn small outline" onClick={() => void record({ type: "booking", answer: "booked", date })}>That's my test date</button>
         </div>
       ) : (
         <div className="row">
-          <button className="btn small" style={{ flex: 1 }} onClick={() => setOpen(true)}>I've booked</button>
+          <button className="btn small outline" style={{ flex: 1 }} onClick={() => setOpen(true)}>I've booked</button>
           <button className="btn ghost small" onClick={() => void record({ type: "booking", answer: "notyet" })}>Not yet</button>
         </div>
       )}
@@ -219,7 +238,7 @@ function rebuildOffer(a: ReturnType<typeof useApp>) {
       <div className="note">
         <div style={{ fontSize: 18 }}>{name[0].toUpperCase() + name.slice(1)} has felt hard everywhere lately. A rebuild week pauses new {name} work for a week of its basics; the finish date moves a week. Your level and % stay as they are.</div>
         <div className="row">
-          <button className="btn small" style={{ flex: 1 }} onClick={async () => {
+          <button className="btn small outline" style={{ flex: 1 }} onClick={async () => {
             await record({ type: "offer", offer: id, answer: "yes" });
             await setSetting({ rebuild: [...(d.settings.rebuild ?? []), { week: ws, section: sec }] });
           }}>Take a rebuild week</button>

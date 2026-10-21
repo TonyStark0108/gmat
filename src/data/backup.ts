@@ -54,7 +54,7 @@ export async function backupNow(ask = true): Promise<{ where: "folder" | "downlo
       const w = await fh.createWritable();
       await w.write(data);
       await w.close();
-      await keepLast(h, 8);
+      await keepLast(h, KEEP);
       await record({ type: "backup", where: "folder", file });
       return { where: "folder", file };
     } catch {
@@ -64,6 +64,30 @@ export async function backupNow(ask = true): Promise<{ where: "folder" | "downlo
   download(file, data);
   await record({ type: "backup", where: "download", file });
   return { where: "download", file };
+}
+
+/** Daily backups: the last two weeks of them are kept in the folder. */
+export const KEEP = 14;
+
+/**
+ * Once a day, with no click: if the backup folder is still allowed (the browser remembers it), write
+ * today's backup there. If the browser wants permission again, nothing pops up; the daily note asks.
+ */
+export async function autoBackup(): Promise<boolean> {
+  const h = await folder(false);
+  if (!h) return false;
+  try {
+    const file = `gmat-backup-${ymd(now())}.json`;
+    const fh = await h.getFileHandle(file, { create: true });
+    const w = await fh.createWritable();
+    await w.write(JSON.stringify(await makeBackup()));
+    await w.close();
+    await keepLast(h, KEEP);
+    await record({ type: "backup", where: "folder", file });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function keepLast(h: DirHandle, n: number) {
