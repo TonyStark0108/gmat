@@ -11,6 +11,7 @@ import { coverage } from "../core/recall";
 import { cardContext } from "../core/model";
 import { record } from "../data/db";
 import { Back, Screen } from "./bits";
+import { Tip } from "./Onboarding";
 import { SUBJECT } from "./copy";
 import { useFocus } from "./focus";
 
@@ -46,6 +47,7 @@ export function MapScreen() {
     <Screen>
       <div className="column" style={{ gap: 14 }}>
         <Back />
+        <Tip id="map">Every task in the plan, week by week. Finished weeks fold up, the week you're in is open, later weeks open when you get there. Colour is the subject.</Tip>
         <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
           <div>
             <div className="eyebrow">The map</div>
@@ -67,13 +69,13 @@ export function MapScreen() {
           return (
             <div key={u.week} ref={isHere ? here : undefined} style={{ display: "flex", flexDirection: "column", gap: 10, scrollMarginTop: 12 }}>
               {u.state === "done" && !openDone.has(u.week) ? (
-                <button className="map-done" onClick={() => setOpenDone((s) => toggle(s, u.week))}>
+                <button className="map-done reveal lift" onClick={() => setOpenDone((s) => toggle(s, u.week))}>
                   <span className="map-check">✓</span>
                   <span style={{ flex: 1, textAlign: "left" }}>Week {u.week} · {u.about}</span>
                   <span className="tiny">{u.total} done</span>
                 </button>
               ) : u.state === "later" && !peek.has(u.week) ? (
-                <button className="map-later" onClick={() => setPeek((s) => toggle(s, u.week))}>
+                <button className="map-later reveal lift" onClick={() => setPeek((s) => toggle(s, u.week))}>
                   <div className="row" style={{ justifyContent: "space-between" }}>
                     <span style={{ fontSize: 18 }}>Week {u.week}</span>
                     <span className="tiny">{u.done ? `${u.done} of ${u.total} done` : `${u.total} tasks`} · about {Math.max(1, Math.round(u.minutesLeft / 60))} h</span>
@@ -97,7 +99,7 @@ export function MapScreen() {
 
 function Unit({ u, picked, onPick, onStart, onFold }: { u: MapUnit; picked: string | null; onPick: (id: string) => void; onStart: (n: MapNode) => void; onFold?: () => void }) {
   return (
-    <div className="map-unit">
+    <div className="map-unit reveal">
       <div className="row" style={{ justifyContent: "space-between" }}>
         <div>
           <div style={{ fontSize: 20 }}>Week {u.week}</div>

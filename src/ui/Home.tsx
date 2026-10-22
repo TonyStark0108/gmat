@@ -2,7 +2,7 @@
 // one card with Start and Skip (spec: Progress; How the app decides what's on the card).
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { go } from "../app/router";
+import { go, useRoute } from "../app/router";
 import { useApp } from "../app/store";
 import { alternativeFor, chooseCard, type Card } from "../core/card";
 import { longDate, slotAt } from "../core/calendar";
@@ -20,6 +20,7 @@ import { SUBJECT, metaOf, pointerOf, titleOf, whereOf } from "./copy";
 import { useFocus } from "./focus";
 import { NoteStack } from "./Notes";
 import { WARMUP_MIN } from "./Cards";
+import { HOME_TOUR, useTilt, useTour } from "./Onboarding";
 
 const MBA_URL = "https://www.mba.com/";   // link catalogue L153
 
@@ -38,6 +39,8 @@ export function Home() {
   const card = chooseCard(ctx);
 
   const lv = levelView(m.level, m.plan, d.done);
+  const { params } = useRoute();
+  const tour = useTour(HOME_TOUR, "home", params.get("tour") === "1");
   const inRow = weeksInARow(d.counted, week?.weekStart ?? today, (w) => !!weekPlanOf(d, w, d.settings)?.pause);
 
   async function start(p: Piece, warmup = false) {
@@ -93,7 +96,7 @@ export function Home() {
   return (
     <Screen right={(card.kind === "task" || card.kind === "resume") && card.piece.planWeek ? `plan week ${card.piece.planWeek}` : ""}>
       <div className="column">
-        <button onClick={() => go("/progress")} style={{ all: "unset", cursor: "pointer", display: "flex", flexDirection: "column", gap: 6 }} title="The journey">
+        <button data-tour="level" onClick={() => go("/progress")} style={{ all: "unset", cursor: "pointer", display: "flex", flexDirection: "column", gap: 6 }} title="The journey">
           <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
             <span style={{ fontSize: 16 }}>{lv.label}</span><span className="tiny" style={{ fontSize: 10 }}>{lv.next}</span>
           </div>
@@ -107,7 +110,7 @@ export function Home() {
           </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 7 }}>
             <div style={{ fontSize: 17, color: "var(--ink-2)" }}>{d.counted.size} {d.counted.size === 1 ? "week" : "weeks"}{inRow >= 2 ? ` · ${inRow} in a row` : ""}</div>
-            <button className="row" style={{ all: "unset", cursor: "pointer", display: "flex", gap: 8, alignItems: "center" }} onClick={() => go("/errors")} title="What to work on">
+            <button data-tour="retired" className="row" style={{ all: "unset", cursor: "pointer", display: "flex", gap: 8, alignItems: "center" }} onClick={() => go("/errors")} title="What to work on">
               <span className="dot" style={{ width: 7, height: 7, background: "var(--rc)", animation: "breathe 4.6s ease-in-out infinite" }} />
               <span className={pulse ? "pulse" : undefined} style={{ fontSize: 19, color: "var(--rc-d)" }}>{m.reviews.retired} retired</span>
             </button>
@@ -117,7 +120,7 @@ export function Home() {
         <NoteStack />
 
         {!bus && card.kind === "task" && slotAt(a.now, d.settings)?.kind !== "morning" && (
-          <MixSwitch chosen={chosen} rec={rec.choice} reason={d.mixByDay.has(today) ? null : rec.reason} />
+          <div data-tour="mix"><MixSwitch chosen={chosen} rec={rec.choice} reason={d.mixByDay.has(today) ? null : rec.reason} /></div>
         )}
 
         <CardView card={card} onPrimary={primary()} onSkip={
@@ -146,7 +149,7 @@ export function Home() {
         )}
 
         <div className="spacer" />
-        <div className="row">
+        <div className="row" data-tour="bus">
           {bus ? (
             <button className="btn small" style={{ width: 150, background: "var(--rc)", borderColor: "var(--rc)" }} onClick={() => void record({ type: "bus", on: false })}>Off the bus</button>
           ) : (
@@ -156,9 +159,9 @@ export function Home() {
             <button className="chip" style={{ border: "1.5px dashed var(--rc)", color: "var(--rc-d)" }} onClick={() => void record({ type: "bus", on: true })}>On the bus?</button>
           )}
           <div className="spacer" />
-          <button className="back" onClick={() => go("/life")}>Something came up</button>
+          <button className="back" data-tour="life" onClick={() => go("/life")}>Something came up</button>
         </div>
-        <nav className="homenav" style={{ borderTop: "1.5px solid var(--line)", paddingTop: 4 }}>
+        <nav className="homenav" data-tour="nav" style={{ borderTop: "1.5px solid var(--line)", paddingTop: 4 }}>
           <NavLink to="/week" label="This week" />
           <NavLink to="/map" label="Map" />
           <NavLink to="/progress" label="Progress" />
@@ -169,6 +172,7 @@ export function Home() {
         </nav>
       </div>
       {toast}
+      {tour.node}
     </Screen>
   );
 }
@@ -304,10 +308,11 @@ function CardView({ card, onPrimary, onSkip }: { card: Card; onPrimary: (() => v
     }
   }
   const go1 = v.onStart ?? onPrimary ?? undefined;
+  const tilt = useTilt<HTMLDivElement>(4);
 
   return (
     <>
-      <div className="card" style={{ boxShadow: `6px 6px 0 ${v.t}`, border: v.border }}>
+      <div className="card" ref={tilt} data-tour="card" style={{ boxShadow: `6px 6px 0 ${v.t}`, border: v.border }}>
         <div className="row" style={{ gap: 8 }}><span className="dot" style={{ background: v.col }} /><span className="eyebrow" style={{ color: v.dk }}>{v.eb}</span></div>
         <div className="t">{v.title}</div>
         {v.ptr && <div className="ptr" style={{ background: v.t }}>{v.ptr}</div>}

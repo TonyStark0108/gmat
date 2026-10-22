@@ -248,6 +248,7 @@ export function SettingsScreen() {
 
         <div className="eyebrow" style={{ marginTop: 10 }}>This laptop</div>
         <button className="btn small ghost" style={{ alignSelf: "flex-start" }} onClick={() => go("/dayone")}>Run the day-one check again</button>
+        <button className="btn small ghost" style={{ alignSelf: "flex-start" }} onClick={() => go("/?tour=1")}>Take the tour of home again</button>
         <div className="tiny">App time {now().toLocaleString()} · {d.eventCount} records</div>
       </div>
       {toast}

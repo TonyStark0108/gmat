@@ -7,6 +7,7 @@ import { DayOne, LoadContent, Setup, dayOnePassed } from "./ui/FirstRun";
 import { Home } from "./ui/Home";
 import { Life } from "./ui/Life";
 import { MapScreen } from "./ui/Map";
+import { Welcome } from "./ui/Onboarding";
 import { CoverageScreen } from "./ui/Coverage";
 import { NewCards } from "./ui/NewCards";
 import { ErrorsScreen, ProgressScreen } from "./ui/Progress";
@@ -39,7 +40,7 @@ export function App() {
   if (!dayOnePassed(d)) return <DayOne />;
   if (contentState === "loading") return null;
   if (contentState === "missing") return <LoadContent />;
-  if (!d.setupDone) return <Setup />;
+  if (!d.setupDone) return d.seen.has("intro") ? <Setup /> : <Welcome />;
   if (path.startsWith("/task/")) return <TaskRunner key={path} pieceId={decodeURIComponent(path.slice(6))} />;
   if (path.startsWith("/review/")) {
     const id = decodeURIComponent(path.slice(8));

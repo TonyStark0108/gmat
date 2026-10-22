@@ -10,6 +10,7 @@ import type { Piece } from "../core/pieces";
 import type { SetReview } from "../core/review";
 import { buildWeek } from "../core/week";
 import { record } from "../data/db";
+import { Tip } from "./Onboarding";
 import { Back, Screen } from "./bits";
 import { SUBJECT, titleOf, words } from "./copy";
 import { useFocus } from "./focus";
@@ -84,6 +85,7 @@ export function Week() {
     <Screen>
       <div className="column">
         <Back />
+        <Tip id="week">This week's tasks. You never have to do them in order or pick from here: the card on home does that. Tap one to start it now.</Tip>
         <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
           <div style={{ fontSize: 30 }}>This week</div>
           <div className="tiny">{week ? `from ${shortDate(week.weekStart)}` : ""}{week?.light ? " · a bus week" : ""}</div>
@@ -92,7 +94,7 @@ export function Week() {
         {week?.pause && <div className="muted" style={{ fontSize: 18 }}>A pause week. Nothing on the plan.</div>}
         <div className="row wrap" style={{ gap: 8 }}>
           {chips.map((p) => (
-            <button key={p.id} className="chip" style={chipStyle(p, d.done.has(p.id))} onClick={() => void open(p)} title={p.task.title ?? ""}>{shortLabel(p)}</button>
+            <button key={p.id} className="chip lift" style={chipStyle(p, d.done.has(p.id))} onClick={() => void open(p)} title={p.task.title ?? ""}>{shortLabel(p)}</button>
           ))}
           {reviews.map((r) => {
             const k = SUBJECT[r.section];

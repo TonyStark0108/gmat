@@ -46,7 +46,7 @@ function Row({ r }: { r: CoverageRow }) {
   const k = SUBJECT[r.section];
   const confirmed = r.standing === "confirmed";
   return (
-    <div className="box" style={{ gap: 4, padding: "10px 14px", opacity: r.standing === "later" ? 0.6 : 1 }}>
+    <div className="box reveal" style={{ gap: 4, padding: "10px 14px", opacity: r.standing === "later" ? 0.6 : 1 }}>
       <div className="row" style={{ justifyContent: "space-between", gap: 10 }}>
         <span className="row" style={{ gap: 8 }}>
           <span className="dot" style={{ background: k.c }} />

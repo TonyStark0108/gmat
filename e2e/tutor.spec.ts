@@ -40,6 +40,7 @@ test("the tutor, end to end", async () => {
   await page.goto("/");
   await page.getByRole("button", { name: /Use it anyway/ }).click();
   await page.locator("input[type=file]").setInputFiles(CONTENT);
+  await page.getByRole("button", { name: "Skip the intro" }).click();
   await expect(page.getByText("Here's the shape of it.")).toBeVisible();
   await seed(page, bot.events);
   await page.reload();

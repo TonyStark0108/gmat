@@ -52,6 +52,12 @@ test("the Phase 1 checklist, end to end", async () => {
   await expect(page.getByText("Load the study file once.")).toBeVisible();
   await snap(page, "The study file screen says where the file is.");
   await page.locator("input[type=file]").setInputFiles(CONTENT);
+  // the welcome: four short screens before setup
+  for (const t of ["One card. That's the app.", "Built for your week, not a perfect one.", "Mistakes come back until they stick.", "Pitched in your flow zone."]) {
+    await expect(page.getByText(t)).toBeVisible();
+    await snap(page, `The welcome: “${t}”`);
+    await page.keyboard.press("Enter");
+  }
   await expect(page.getByText("Here's the shape of it.")).toBeVisible();
   const pace = await page.getByText(/At this pace: \d{1,2} \w+ \d{4}\./).textContent();
   notes.push(`Setup worked out the finish date: ${pace?.match(/At this pace: (.*)\./)?.[1]}.`);
@@ -209,6 +215,7 @@ test("the Phase 1 checklist, end to end", async () => {
   await p2.goto("/");
   await p2.getByRole("button", { name: /Use it anyway/ }).click();
   await p2.locator("input[type=file]").setInputFiles(CONTENT);
+  await p2.getByRole("button", { name: "Skip the intro" }).click();
   await p2.getByRole("button", { name: "Next", exact: true }).click();
   await p2.getByRole("button", { name: "Got it" }).click();
   await expect(p2.getByText("0%")).toBeVisible();

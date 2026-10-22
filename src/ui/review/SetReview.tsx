@@ -21,6 +21,7 @@ import { LinkOut } from "../LinkOut";
 import { useTaskTime } from "../focus";
 import { AnswerPick, Dot, KeyLine, LETTERS, TagPick, isTwoPart, showAnswer, tagsFor } from "./parts";
 import { Star } from "../tasks/Grid";
+import { Tip } from "../Onboarding";
 import { closeRemedies } from "../../core/recall";
 
 export function SetReviewScreen({ id }: { id: string }) {
@@ -69,7 +70,7 @@ function Inner({ s }: { s: SR }) {
     </>
   );
 
-  if (step === "retry") return <Retry s={s} list={retryList} header={header} onDone={() => next("retry")} />;
+  if (step === "retry") return <Retry s={s} list={retryList} header={<>{header}<Tip id="review">The review: the ones you missed or weren't sure of, from scratch, with the answers hidden. Trying again before you see the answer is what makes it stick.</Tip></>} onDone={() => next("retry")} />;
   if (step === "dots") {
     const ok = retryList.filter((it) => right(it, att(it, "retry")?.value ?? null)).length;
     const left = retryList.length - ok;

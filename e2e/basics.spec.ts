@@ -33,11 +33,28 @@ test("the basics, end to end", async () => {
   await page.goto("/");
   await page.getByRole("button", { name: /Use it anyway/ }).click();
   await page.locator("input[type=file]").setInputFiles(CONTENT);
+  await page.getByRole("button", { name: "Skip the intro" }).click();
   await expect(page.getByText("Here's the shape of it.")).toBeVisible();
   await seed(page, [...bot.events, { type: "settings", patch: { exams36: "not bought" }, id: "e-audit-1", ts: at("2026-12-05T20:31").getTime(), day: "2026-12-05" }]);
   await page.reload();
   await settled(page);
   await jumpTo(ctx, page, at("2026-12-08T19:00"));
+
+  setStep("0 · The tour of home (from Settings: Take the tour of home again)");
+  await page.goto("/#/?tour=1");
+  await settled(page);
+  const tip = page.locator(".tour-tip");
+  await expect(tip).toContainText("The card");
+  await snap(page, "The tour, step 1: the card, lit up; everything else dimmed.");
+  for (let i = 0; i < 12 && (await tip.count()); i++) {
+    const label = await tip.getByRole("button", { name: /Next|Done/ }).textContent();
+    if (/Retired|Mistakes retired/.test((await tip.textContent()) ?? "")) await snap(page, "A later step: mistakes retired, and where they lead.");
+    await tip.getByRole("button", { name: /Next|Done/ }).click();
+    if (label === "Done") break;
+    await page.waitForTimeout(150);
+  }
+  await expect(page.locator(".tour")).toHaveCount(0);
+  notes.push("The home tour ran from start to finish and closed.");
 
   setStep("1 · The free stand-in mock (Exams 3–6 not bought)");
   await page.goto(`/#/task/${encodeURIComponent("w09-mock-01#0")}`);

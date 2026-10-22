@@ -8,6 +8,7 @@ import { shortDate } from "../core/calendar";
 import { climb, milestones, readingSetsLeft, sectionBars, whatsLeftFor } from "../core/milestones";
 import { LEVELS } from "../core/progress";
 import { go } from "../app/router";
+import { Tip } from "./Onboarding";
 import { Back, Screen } from "./bits";
 
 export function ProgressScreen() {
@@ -26,6 +27,7 @@ export function ProgressScreen() {
       <div className="column">
         <Back />
         <div className="title">Progress</div>
+        <Tip id="progress">Your journey through the plan: the levels, the % over the weeks, and your mock scores against your target. Nothing here can go backwards.</Tip>
 
         <div className="eyebrow">The journey</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -112,7 +114,7 @@ export function ErrorsScreen() {
         <div className="row wrap"><button className="btn small outline" onClick={() => go("/log")}>Log a question from another source</button></div>
         {!groups.length && <div className="muted" style={{ fontSize: 17 }}>Nothing in review right now.</div>}
         {groups.map((g, i) => (
-          <div key={i} className="box" style={{ gap: 4 }}>
+          <div key={i} className="box reveal" style={{ gap: 4 }}>
             <div style={{ fontSize: 19 }}>{g.heading}</div>
             <div className="small">{g.detail}</div>
             {g.resting && <div className="tiny">Back to this in 10 days ({shortDate(g.resting)}).</div>}
