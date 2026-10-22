@@ -63,10 +63,16 @@ function leadVideos(tasks: Task[]): Task[] {
 }
 
 /**
+ * GMAT Club's multi-source reasoning tag search, every difficulty (tags 1592–1594 and 1630–1632, the
+ * same pattern as the plan's graphs & tables and two-part lists). The plan has no multi-source list;
+ * this one was given by you on 22 Oct 2026. A link, never copied or checked by the app.
+ */
+export const MSR_LIST = "https://gmatclub.com/forum/search.php?selected_search_tags%5B%5D=1630&selected_search_tags%5B%5D=1631&selected_search_tags%5B%5D=1594&selected_search_tags%5B%5D=1632&selected_search_tags%5B%5D=1593&selected_search_tags%5B%5D=1592&t=0&search_tags=exact&submit=Search";
+
+/**
  * 4. The GMAT with CJ list has 25 multi-source, 39 table and 37 graph questions; the plan's DI sets
  * ask it for 172. Shared out in plan order: once a type is used up, graphs and tables come from the
- * plan's own GMAT Club graphs & tables lists, and multi-source from the DI Review online bank if you
- * have it (logged under What to work on → Log a question).
+ * plan's own GMAT Club graphs & tables lists, and multi-source from GMAT Club's multi-source list.
  */
 export const CJ_SUPPLY: Record<string, number> = { MSR: 25, TA: 39, GI: 37 };
 function shareCj(tasks: Task[]): Task[] {
@@ -99,7 +105,7 @@ function shareCj(tasks: Task[]): Task[] {
       if (cjCount) recipe.push({ ...r, count: cjCount, types: Object.keys(fromCj) });
       const url = gtLists(t.plan_week);
       if (over.gt && url) recipe.push({ source: "GMAT Club graphs & tables list (the plan's own)", url, count: over.gt, types: gt });
-      if (over.msr) recipe.push({ source: "Multi-source sets from the DI Review online bank, if you have it (log them under What to work on)", count: over.msr, types: ["MSR"] });
+      if (over.msr) recipe.push({ source: "GMAT Club multi-source list", url: MSR_LIST, count: over.msr, types: ["MSR"] });
     }
     return { ...t, pointer: { ...t.pointer, recipe } };
   });

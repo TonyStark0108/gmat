@@ -10,6 +10,7 @@ import type { Piece } from "./pieces";
 import type { Item, ReviewModel } from "./review";
 import type { Derived } from "./state";
 import { DI_TYPE_OF, listTopic } from "./topics";
+import { MSR_LIST } from "./planFixes";
 
 export const ADAPT_MIN_ATTEMPTS = 15;
 export const RECENT = 20;
@@ -228,6 +229,8 @@ export function listsFor(content: Content, topic: string, order: Difficulty | "e
     const i = want.indexOf(k);
     return i === -1 ? 9 : i;
   };
+  // the plan has no multi-source list of its own
+  if (!lists.length && t === "multi-source reasoning") lists.push({ label: "Multi-source list", url: MSR_LIST, d: "mixed" });
   return lists.sort((a, b) => rank(a.d) - rank(b.d)).map(({ label, url }) => ({ label, url }));
 }
 

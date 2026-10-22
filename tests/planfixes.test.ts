@@ -1,7 +1,8 @@
 // The plan audit's corrections (src/core/planFixes.ts), checked against the real plan.
 
 import { describe, expect, it } from "vitest";
-import { CJ_SUPPLY, fixedPlan } from "../src/core/planFixes";
+import { CJ_SUPPLY, MSR_LIST, fixedPlan } from "../src/core/planFixes";
+import { listsFor } from "../src/core/adapt";
 import { planTasks, toPieces } from "../src/core/pieces";
 import { projectFinish } from "../src/core/week";
 import { realContent, settings } from "./helpers";
@@ -40,7 +41,7 @@ describe.skipIf(!R)("the plan, as corrected", () => {
     for (const t of wk(4).filter((x) => x.section === "cr")) expect(t.depends_on, t.id).toContain("w04-rc-01");
   });
 
-  it("the GMAT with CJ list is never asked for more than it has; the rest come from the plan's lists or the DI Review bank", () => {
+  it("the GMAT with CJ list is never asked for more than it has; the rest come from GMAT Club's graphs & tables and multi-source lists", () => {
     const used: Record<string, number> = {};
     let fallbackGt = 0, fallbackMsr = 0;
     for (const t of tasks.filter((x) => x.kind === "di_set")) {
@@ -50,13 +51,19 @@ describe.skipIf(!R)("the plan, as corrected", () => {
       for (const r of t.pointer.recipe ?? []) {
         if (/GMAT with CJ/.test(r.source)) for (const ty of r.types ?? []) used[ty] = (used[ty] ?? 0) + r.count / (r.types!.length);
         if (/graphs & tables list/.test(r.source)) { fallbackGt += r.count; expect(r.url).toMatch(/^https:\/\/gmatclub\.com\//); }
-        if (/DI Review online bank/.test(r.source)) fallbackMsr += r.count;
+        if (/multi-source list/.test(r.source)) { fallbackMsr += r.count; expect(r.url).toMatch(/^https:\/\/gmatclub\.com\/forum\/search\.php\?/); }
       }
     }
     const cj = tasks.filter((x) => x.kind === "di_set").flatMap((t) => t.pointer.recipe ?? []).filter((r) => /GMAT with CJ/.test(r.source)).reduce((s, r) => s + r.count, 0);
     expect(cj).toBeLessThanOrEqual(Object.values(CJ_SUPPLY).reduce((s, n) => s + n, 0));
     expect(fallbackGt).toBeGreaterThan(0);
-    expect(fallbackMsr).toBeGreaterThan(0);
+    expect(fallbackMsr).toBe(41);
+    // every recipe line now has somewhere to go
+    for (const t of tasks.filter((x) => x.kind === "di_set")) for (const r of t.pointer.recipe ?? []) expect(!!r.url || /book|Starter Kit/i.test(r.source), `${t.id}: ${r.source}`).toBe(true);
+  });
+
+  it("extra practice and top-ups on multi-source have a list to use", () => {
+    expect(listsFor(R!, "multi-source reasoning", "medium")[0].url).toBe(MSR_LIST);
   });
 
   it("with Exams 3–6 bought, weeks 9–13 hold Exams 2–6 in order; the finish date doesn't move", () => {
