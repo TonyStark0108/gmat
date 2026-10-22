@@ -13,6 +13,7 @@ import {
 } from "./adapt";
 import { listTopic, topicName } from "./topics";
 import { confirmedTopics } from "./mastery";
+import { lastFeelFor, paceOf, zoneOf, type Pace, type Zone } from "./flow";
 import { weekNumber } from "./sunday";
 import type { WeekPlan } from "./week";
 
@@ -21,6 +22,8 @@ export interface WorkOnGroup { heading: string; detail: string; count: number; t
 export interface AdaptView {
   stats: Map<string, TopicStat>;
   confirmed: Set<string>;         // topics with confirmed evidence: extra practice leaves them be
+  zone: (topic: string) => Zone;  // the flow zone: stretch, flow, easy (or new)
+  pace: (topic: string) => Pace;
   sections: ReturnType<typeof sectionStats>;
   weakest: AdaptSection | null;
   weight: (topic: string | null) => number;
@@ -41,6 +44,8 @@ const SEC_NAME: Record<string, string> = { quant: "quant", di: "DI", rc: "readin
 export function buildAdapt(content: Content, reviews: ReviewModel, d: Derived, byId: Map<string, Piece>, mocks: MockResult[], today: string): AdaptView {
   const stats = topicStats(reviews, d, byId, today);
   const confirmed = confirmedTopics(stats, reviews, today);
+  const zone = (topic: string) => zoneOf(stats.get(topic), lastFeelFor(topic, d, byId, reviews, today));
+  const pace = (topic: string) => paceOf(zone(topic), stats.get(topic));
   const open = new Map([...stats].filter(([k]) => !confirmed.has(k)));
   const sections = sectionStats(reviews, d);
   const lastMock = [...mocks].reverse().find((m) => m.official && m.quant !== null && m.verbal !== null && m.di !== null);
@@ -70,7 +75,7 @@ export function buildAdapt(content: Content, reviews: ReviewModel, d: Derived, b
 
   const planWeekOf = (ws: string) => Math.max(0, ...(d.weeks.get(ws)?.chips ?? []).map((c) => byId.get(c.pieceId)?.planWeek ?? 0));
   const listSpec = (id: string, kind: ExtraSpec["kind"], ws: string, topic: string, section: Section, title: string, minutes: number, count: number, reason?: string): ExtraSpec | null => {
-    const diff = difficultyFor(stats.get(topic));
+    const diff = difficultyFor(stats.get(topic), zone(topic));
     let urls = listsFor(content, topic, diff).slice(0, 2);
     // from plan week 8, quant and DS practice uses the harder lists you've pasted in: 655–705 first,
     // 705+ first once the topic is "hard" (80%+ on two separate sets)
@@ -86,7 +91,7 @@ export function buildAdapt(content: Content, reviews: ReviewModel, d: Derived, b
   const usedRc = new Set([...content.plan.tasks.filter((t) => t.kind === "rc_section").map((t) => t.pointer.section), ...[...d.extras.values()].filter((x) => x.open.type === "rc").map((x) => (x.open as { section: string }).section)]);
 
   const view: AdaptView = {
-    stats, confirmed, sections, weakest, weight,
+    stats, confirmed, zone, pace, sections, weakest, weight,
     timingEarly: (s) => leadingTag(stats, [s]) === "timing",
     carelessLeads: leadingTag(stats, ["quant", "di"]) === "careless",
     extraChip: (ws) => {

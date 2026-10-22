@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { go } from "../../app/router";
 import { useApp } from "../../app/store";
 import { DAY_NAMES, addDays, nextDeskSlot, parseYmd, ymd } from "../../core/calendar";
@@ -9,6 +9,8 @@ import { submitLine, whyLink } from "../../core/results";
 import { record } from "../../data/db";
 import type { TopupOffer as TopupOfferT } from "../../core/adapt";
 import { TopupOffer } from "../review/SetReview";
+import { feelReply, hardStreak, topicsOfPiece, type Feel } from "../../core/flow";
+import { topicName } from "../../core/topics";
 import { Back, Screen, openOut, useKeys } from "../bits";
 import { CardSession } from "../Cards";
 import { words } from "../copy";
@@ -25,10 +27,15 @@ import { RecallTask } from "./Recall";
 export interface Logged { toLookAgain: number; firstHalf?: boolean; note?: string; offer?: TopupOfferT }
 
 export function TaskRunner({ pieceId }: { pieceId: string }) {
-  const { byId, d } = useApp();
+  const { byId, d, bus } = useApp();
   const [logged, setLogged] = useState<Logged | null>(null);
   const [checked, setChecked] = useState(false);
   const p = byId.get(pieceId);
+  // opening a task starts it, wherever it was opened from (home, the week, the map, a link); it only
+  // comes back as "waiting where you left it" once work has gone in
+  useEffect(() => {
+    if (p && !d.started.has(p.id) && !d.done.has(p.id)) void record({ type: "piece.started", piece: p.id, mode: bus ? "bus" : "desk" });
+  }, [p?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!p) {
     return <Screen><Back /><div className="t">That task isn't in this plan.</div></Screen>;
   }
@@ -53,6 +60,31 @@ export function TaskRunner({ pieceId }: { pieceId: string }) {
     case "mock": return t.pointer.type === "official_mock" ? <MockTask piece={p} onDone={done} /> : <Outside piece={p} onDone={done} />;
     default: return <Outside piece={p} onDone={done} />;
   }
+}
+
+/** One tap after a set: too easy, about right, or too hard. It moves the topic's flow zone. */
+function FeelCheck({ piece }: { piece: Piece }) {
+  const { d, m, content, today } = useApp();
+  const said = [...d.feels].reverse().find((f) => f.piece === piece.id);
+  const topic = topicsOfPiece(piece, m.reviews, content ?? undefined)[0] ?? null;
+  const name = topic ? topicName(topic).toLowerCase() : null;
+  if (said) {
+    return (
+      <div className="small">
+        {feelReply(said.feel, name)}
+        {hardStreak(d, today) ? " Two hard ones in a row: ten minutes off, or switch to cards. Both count." : ""}
+      </div>
+    );
+  }
+  const opts: { v: Feel; label: string }[] = [{ v: "easy", label: "Too easy" }, { v: "right", label: "About right" }, { v: "hard", label: "Too hard" }];
+  return (
+    <div className="note" style={{ gap: 8 }}>
+      <div style={{ fontSize: 18 }}>How did that feel?</div>
+      <div className="row wrap" style={{ gap: 8 }}>
+        {opts.map((o) => <button key={o.v} className="btn small outline" onClick={() => void record({ type: "feel", piece: piece.id, feel: o.v })}>{o.label}</button>)}
+      </div>
+    </div>
+  );
 }
 
 /** On submit, the same day: a count, the week's benchmark line, and never the letters (spec: After a set). */
@@ -92,6 +124,7 @@ function LoggedScreen({ piece, logged }: { piece: Piece; logged: Logged }) {
         </div>
         {bench && <div style={{ fontSize: 19, lineHeight: 1.35 }}>{bench}{why && <button className="back" style={{ marginLeft: 8, color: "var(--link)" }} onClick={() => openOut(why)}>Why?</button>}</div>}
         {logged.note && <div className="muted" style={{ fontSize: 18 }}>{logged.note}</div>}
+        <FeelCheck piece={piece} />
         {logged.offer && <TopupOffer offer={logged.offer} />}
         {careless && !logged.firstHalf && <div className="small">Check units and what's being asked.</div>}
         {checkMode && !answered && (

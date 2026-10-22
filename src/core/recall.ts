@@ -55,6 +55,7 @@ export function keysOfTask(t: Task, content: Content): string[] {
     else out.add(topic);
   };
   if (t.section === "rc") out.add("rc");
+  if (t.timed || t.pointer.type === "sprint") out.add("pacing");
   if (t.section === "cr") { out.add("cr"); if (t.topic) out.add(`cr:${t.topic}`); }
   if (t.topic && (t.section === "quant" || t.section === "di")) quantish(listTopic(t.topic));
   if (t.kind === "video" || t.kind === "drill") {
@@ -329,7 +330,7 @@ export function checkSpecs(m: Model): ExtraSpec[] {
     const age = daysBetween(c.from, today);
     if (age < CHECK_AFTER || age > CHECK_WINDOW) continue;
     if (out.some((x) => x.topic === c.topic) || [...d.extras.values()].some((x) => x.kind === "check" && x.topic === c.topic && daysBetween(x.addedDay, today) < CHECK_AFTER)) continue;
-    const urls = listsFor(content, c.topic, difficultyFor(m.adapt.stats.get(c.topic))).slice(0, 2);
+    const urls = listsFor(content, c.topic, difficultyFor(m.adapt.stats.get(c.topic), m.adapt.zone(c.topic))).slice(0, 2);
     if (!urls.length) continue;
     out.push({ id: c.id, kind: "check", week: ws, section: c.section, topic: c.topic, title: `Check · ${topicName(c.topic).toLowerCase()} · 6 new questions`, minutes: 15,
       open: { type: "list", urls, count: 6 }, reason: c.reason });

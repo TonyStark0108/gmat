@@ -10,6 +10,8 @@ import { otherList } from "../../core/links";
 import type { Piece } from "../../core/pieces";
 import { DI_TYPE_OF, listTopic } from "../../core/topics";
 import { weekStartOf } from "../../core/calendar";
+import { listOrder, paceLine, topicsOfPiece, zoneLine } from "../../core/flow";
+import { topicName } from "../../core/topics";
 import { record } from "../../data/db";
 import { Back, Screen } from "../bits";
 import { SUBJECT, pointerOf, titleOf, whereOf } from "../copy";
@@ -44,11 +46,16 @@ export function Outside({ piece, onDone }: { piece: Piece; onDone: (l: Logged | 
     return () => document.removeEventListener("visibilitychange", on);
   }, []);
 
+  // the flow zone for this set's topic: which list first, and whether the clock is on
+  const ft = topicsOfPiece(piece, m.reviews, content ?? undefined)[0] ?? null;
+  const zone = ft ? m.adapt.zone(ft) : "new";
+  const pace = ft ? m.adapt.pace(ft) : "untimed";
+  const sprint = ptr.type === "sprint";
   const links = useMemo(() => {
     const out: { label: string; url: string }[] = [];
     if (Array.isArray(ptr.links)) out.push(...(ptr.links as { label: string; url: string }[]));
     else if (ptr.lists) {
-      const order = t.plan_week <= 2 ? ["easy", "mixed", "medium"] : ["medium", "mixed", "easy"];   // from week 8 the plan recommends the Sub-655 list
+      const order = listOrder(zone, t.plan_week);   // from week 8 the plan recommends the Sub-655 list; a stretch starts easier, an easy zone harder
       const ks = Object.keys(ptr.lists).sort((a, b) => order.indexOf(a) - order.indexOf(b));
       out.push(...ks.map((key) => ({ label: key === "easy" ? "Easier list" : key === "older_og" ? "Older OG questions" : key === "lsat" ? "LSAT questions" : key === "medium" ? "Medium list" : "Mixed difficulty", url: ptr.lists![key] })));
     } else if (ptr.lists_pool) out.push(...ptr.lists_pool.map((l) => ({ label: `${l.topic ?? "mixed"} (${l.qtype === "GT" ? "graphs & tables" : l.qtype})`, url: l.url })));
@@ -61,7 +68,7 @@ export function Outside({ piece, onDone }: { piece: Piece; onDone: (l: Logged | 
       }
     } else if (ptr.url) out.push({ label: t.kind === "admin" ? "Open the page" : "Open it", url: ptr.url });
     return out.filter((l) => !d.deadLinks.has(l.url));
-  }, [content, t, ptr, d.deadLinks]);
+  }, [content, t, ptr, d.deadLinks, zone]);
 
   const printedTPA = t.kind === "di_set" ? ptr.recipe?.find((r) => r.numbers) : undefined;
   const isQuestions = ["cr_set", "gmatclub_set", "di_set"].includes(t.kind) || t.kind === "mock";
@@ -115,7 +122,9 @@ export function Outside({ piece, onDone }: { piece: Piece; onDone: (l: Logged | 
   );
 
   const verbal = timedVerbal(ptr);
-  const how = verbal && t.kind !== "mock" ? `A timed verbal section: ${verbal.cr} CR questions, then ${verbal.passages} reading passages, 45 minutes in all, in one go.`
+  const how = sprint ? "A sprint: 10 questions in 20 minutes, without pausing. A minute in with no way forward: cross out what you can, guess, move on. No blanks. Afterwards, retry the guessed ones with no clock before any solution."
+    : ptr.type === "book_chapter" ? `Read chapter ${ptr.chapter}, ${ptr.label}, in your copy of ${ptr.source}, on screen. Its problem set is optional, at a desk.`
+    : verbal && t.kind !== "mock" ? `A timed verbal section: ${verbal.cr} CR questions, then ${verbal.passages} reading passages, 45 minutes in all, in one go.`
     : t.kind === "gmatclub_set" || t.kind === "di_set"
     ? timed ? `A timed section: ${(ptr.questions as number | undefined) ?? ptr.count ?? piece.count ?? 21} questions, 45 minutes, in one go. Noteboard, not paper.`
       : `Work down the list: ${ptr.count ?? piece.count ?? 10} you haven't done.${ptr.how ? " " + String(ptr.how) : ""} For each wrong one, click Send to GMAT app in your bookmarks bar.`
@@ -145,6 +154,10 @@ export function Outside({ piece, onDone }: { piece: Piece; onDone: (l: Logged | 
         <div style={{ fontSize: 25, lineHeight: 1.15 }}>{titleOf(piece)}</div>
         {pointerOf(piece, content) && <div className="ptr" style={{ background: k.t }}>{pointerOf(piece, content)}</div>}
         {how && <div className="muted" style={{ fontSize: 16, lineHeight: 1.4 }}>{how}</div>}
+        {isQuestions && !timed && ft && zoneLine(zone, topicName(ft)) && <div className="small">{zoneLine(zone, topicName(ft))}</div>}
+        {isQuestions && !timed && <div className="small">{paceLine(pace, piece.section)}</div>}
+        {timed && !sprint && <div className="small">Pacing: about question 5 with 35 minutes left, 10 with 25, 15 with 15. A minute in with no way forward, guess and move on. Never leave a blank.</div>}
+        {sprint && <SprintClock minutes={(ptr.minutes as number | undefined) ?? 20} count={(ptr.count as number | undefined) ?? 10} />}
         {table && <div className="small">Table questions: find the column the question is about before reading any rows.</div>}
 
         {verbal && <VerbalMaterial piece={piece} cr={verbal.cr} passages={verbal.passages} />}
@@ -186,7 +199,7 @@ export function Outside({ piece, onDone }: { piece: Piece; onDone: (l: Logged | 
                   </div>
                 ))}
               </div>
-            )) : <>{counter("right", "Right")}{counter("wrong", "Wrong")}{counter("unsure", "Not sure")}</>}
+            )) : <>{counter("right", "Right")}{counter("wrong", "Wrong")}{counter("unsure", sprint ? "Guessed" : "Not sure")}</>}
             {(t.kind === "gmatclub_set" || t.kind === "di_set") && <PasteShare piece={piece} />}
           </div>
         )}
@@ -203,6 +216,34 @@ export function Outside({ piece, onDone }: { piece: Piece; onDone: (l: Logged | 
         )}
       </div>
     </Screen>
+  );
+}
+
+/**
+ * The sprint clock: 20 minutes for 10 questions, a tap per question. It says whether you're on pace
+ * (2 minutes a question) and, when you're behind, what to do about it. Nothing is recorded but the
+ * counters you fill in after.
+ */
+function SprintClock({ minutes, count }: { minutes: number; count: number }) {
+  const [start, setStart] = useState<number | null>(null);
+  const [q, setQ] = useState(1);
+  const [, tick] = useState(0);
+  useEffect(() => { if (start === null) return; const i = setInterval(() => tick((x) => x + 1), 1000); return () => clearInterval(i); }, [start]);
+  if (start === null) return <button className="btn outline" onClick={() => setStart(Date.now())}>Start the {minutes}-minute clock</button>;
+  const left = Math.max(0, minutes * 60 - Math.floor((Date.now() - start) / 1000));
+  const per = (minutes * 60) / count;
+  const shouldHave = minutes * 60 - (q - 1) * per;            // time that ought to be left at this question
+  const behind = left < shouldHave - per / 2;
+  const mmss = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+  return (
+    <div className="box" style={{ gap: 8, alignItems: "flex-start" }}>
+      <div className="row" style={{ gap: 18, alignItems: "baseline" }}>
+        <span style={{ fontSize: 40, fontVariantNumeric: "tabular-nums" }}>{mmss}</span>
+        <span style={{ fontSize: 18 }}>Question {Math.min(q, count)} of {count}</span>
+      </div>
+      <div className="small">{left === 0 ? "Time. Answer anything left with a guess: no blanks." : q > count ? "All ten done." : behind ? "Behind pace: guess the next one you can't see into within 30 seconds." : "On pace."}</div>
+      {left > 0 && q <= count && <button className="btn small outline" onClick={() => setQ((x) => x + 1)}>Next question</button>}
+    </div>
   );
 }
 

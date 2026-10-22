@@ -75,6 +75,7 @@ export interface Derived {
   drafts: Map<string, { front: string; back: string }>;
   looks: Map<string, { on: boolean; ts: number; day: string }>;
   retiredItems: Set<string>;
+  feels: { piece: string; feel: "easy" | "right" | "hard"; ts: number; day: string }[];
   // life
   datechecks: Of<"datecheck">[];
   letgo: Map<string, boolean>;           // task -> keep?
@@ -110,7 +111,7 @@ export function derive(events: AppEvent[], sectionOf: (pieceId: string) => Secti
     reviewStarted: new Map(), reviewDone: new Map(), reviewStep: new Map(), reviewTouched: new Set(), attempts: new Map(), tags: new Map(),
     keysEntered: new Map(), keyOverrides: new Map(), bookChecks: [],
     introduced: new Map(), introWeeks: new Set(), cardRatings: new Map(), cardFront: new Map(), cardPaused: new Set(),
-    cardDeleted: new Set(), cardSessions: [], cardKept: new Map(), offered: new Map(), offerDays: new Set(), drafts: new Map(), looks: new Map(), retiredItems: new Set(),
+    cardDeleted: new Set(), cardSessions: [], cardKept: new Map(), offered: new Map(), offerDays: new Set(), drafts: new Map(), looks: new Map(), retiredItems: new Set(), feels: [],
     datechecks: [], letgo: new Map(), extras: new Map(), offers: new Map(), offersAt: new Map(), shared: [], qlogs: [], deadLinks: new Map(),
     crSwaps: [], videoChecks: new Map(), mockMoved: new Map(), mockMisses: new Map(), booking: [], testResult: null,
     seen: new Map(), restoredAt: null, tutorNotes: [], tutorSpend: new Map(), eventCount: events.length,
@@ -227,6 +228,7 @@ export function derive(events: AppEvent[], sectionOf: (pieceId: string) => Secti
       case "card.drafted": d.drafts.set(e.item, { front: e.front, back: e.back }); break;
       case "look": d.looks.set(e.item, { on: e.on, ts: e.ts, day: e.day }); break;
       case "retired": d.retiredItems.add(e.item); break;
+      case "feel": d.feels.push({ piece: e.piece, feel: e.feel, ts: e.ts, day: e.day }); break;
       // ---- life
       case "lifeup": life.push({ from: e.from, to: e.to, mode: e.kind === "week" ? "light" : "off" }); break;
       case "datecheck": d.datechecks.push(e); break;

@@ -111,6 +111,120 @@ function shareCj(tasks: Task[]): Task[] {
   });
 }
 
+/**
+ * 5. A textbook to learn from (from GMAT Club's 12-week plan, 22 Oct 2026): each chapter of Manhattan
+ * Prep's All the Quant + DI (you own it) comes in the plan week its topic first does, before that
+ * week's practice. Reading on screen, so it fits a ride; its problem set is optional, at a desk.
+ * Not a gate: practice never waits for a chapter. A chapter waits only for what every task in its
+ * week and section waits for (the plan's "watch this first" video).
+ */
+export const BOOK = "All the Quant + DI (Manhattan Prep)";
+type Anchor = { topic?: string; ds?: true; di?: "TA" | "GI" | "MSR" | "TPA"; week?: number };
+const CHAPTERS: { ch: number; title: string; section: "quant" | "di"; at: Anchor; minWeek?: number; minutes: number }[] = [
+  { ch: 1, title: "How Quant and DI Work", section: "quant", at: { week: 1 }, minutes: 25 },
+  { ch: 2, title: "Math Fundamentals", section: "quant", at: { topic: "arithmetic" }, minutes: 30 },
+  { ch: 3, title: "Data Sufficiency 101", section: "di", at: { ds: true }, minutes: 45 },
+  { ch: 4, title: "Fractions and Ratios", section: "quant", at: { topic: "arithmetic" }, minutes: 40 },
+  { ch: 5, title: "Strategy: Estimation", section: "quant", at: { topic: "word problems" }, minutes: 20 },
+  { ch: 6, title: "Percents", section: "quant", at: { topic: "percents" }, minutes: 35 },
+  { ch: 7, title: "Strategy: Arithmetic vs. Algebra 101", section: "quant", at: { topic: "algebra" }, minutes: 30 },
+  { ch: 8, title: "Table Analysis", section: "di", at: { di: "TA" }, minutes: 30 },
+  { ch: 9, title: "Digits and Decimals", section: "quant", at: { topic: "number properties" }, minutes: 25 },
+  { ch: 10, title: "Graphics Interpretation", section: "di", at: { di: "GI" }, minutes: 30 },
+  { ch: 11, title: "Linear Equations and Combos", section: "quant", at: { topic: "algebra" }, minutes: 35 },
+  { ch: 12, title: "Exponents", section: "quant", at: { topic: "exponents" }, minutes: 35 },
+  { ch: 13, title: "Roots", section: "quant", at: { topic: "roots" }, minutes: 30 },
+  { ch: 14, title: "Quadratic Equations", section: "quant", at: { topic: "algebra" }, minWeek: 2, minutes: 35 },
+  { ch: 15, title: "Formulas", section: "quant", at: { topic: "sequences" }, minutes: 30 },
+  { ch: 16, title: "Inequalities and Max/Min", section: "quant", at: { topic: "inequalities" }, minutes: 35 },
+  { ch: 17, title: "Translations", section: "quant", at: { topic: "word problems" }, minutes: 35 },
+  { ch: 18, title: "Multi-Source Reasoning", section: "di", at: { di: "MSR" }, minutes: 30 },
+  { ch: 19, title: "Statistics", section: "quant", at: { topic: "statistics" }, minutes: 35 },
+  { ch: 20, title: "Weighted Averages", section: "quant", at: { topic: "statistics" }, minutes: 30 },
+  { ch: 21, title: "Two-Part Analysis", section: "di", at: { di: "TPA" }, minutes: 30 },
+  { ch: 22, title: "Rates and Work", section: "quant", at: { topic: "rates" }, minutes: 40 },
+  { ch: 23, title: "Overlapping Sets", section: "quant", at: { topic: "overlapping sets" }, minutes: 30 },
+  { ch: 24, title: "Strategy: Arithmetic vs. Algebra 201", section: "quant", at: { topic: "word problems" }, minWeek: 5, minutes: 30 },
+  { ch: 25, title: "Consecutive Integers", section: "quant", at: { topic: "sequences" }, minutes: 25 },
+  { ch: 26, title: "Logic Problems", section: "quant", at: { topic: "word problems" }, minWeek: 6, minutes: 25 },
+  { ch: 27, title: "Divisibility and Primes", section: "quant", at: { topic: "multiples and factors" }, minutes: 40 },
+  { ch: 28, title: "Odds, Evens, Positives, and Negatives", section: "quant", at: { topic: "number properties" }, minutes: 30 },
+  { ch: 29, title: "Combinatorics", section: "quant", at: { topic: "combinations & permutations" }, minutes: 40 },
+  { ch: 30, title: "Probability", section: "quant", at: { topic: "probability" }, minutes: 35 },
+  { ch: 31, title: "Coordinate Plane", section: "quant", at: { topic: "probability" }, minutes: 30 },
+];
+
+function firstWeekOf(tasks: Task[], at: Anchor): number | null {
+  if (at.week) return at.week;
+  const hit = tasks.filter((t) =>
+    (at.topic && t.topic === at.topic)
+    || (at.ds && t.kind === "og_set" && t.pointer.qtype === "DS")
+    || (at.di && ((t.pointer.types as string[] | undefined)?.includes(at.di)
+      || (at.di === "TPA" && (t.topic === "two-part analysis" || t.pointer.qtype === "TPA"))
+      || ((at.di === "TA" || at.di === "GI") && t.topic === "graphs & tables"))));
+  return hit.length ? Math.min(...hit.map((t) => t.plan_week)) : null;
+}
+
+function bookChapters(tasks: Task[]): Task[] {
+  if (tasks.some((t) => t.id.startsWith("mh-ch"))) return tasks;
+  let out = [...tasks];
+  for (const c of [...CHAPTERS].sort((a, b) => a.ch - b.ch)) {
+    const w0 = firstWeekOf(tasks, c.at);
+    if (w0 === null) continue;
+    const week = Math.max(w0, c.minWeek ?? 1);
+    const peers = tasks.filter((x) => x.plan_week === week && x.section === c.section);
+    const lead = peers.length ? peers[0].depends_on.filter((dep) => peers.every((x) => x.depends_on.includes(dep))) : [];
+    const t: Task = {
+      id: `mh-ch${String(c.ch).padStart(2, "0")}`, plan_week: week, section: c.section, kind: "article", title: `Read: ${BOOK}, ch. ${c.ch}, ${c.title}`,
+      optional: "recommended", est_minutes: c.minutes, review_minutes: 0, needs_desk: false, bus_ok: true, offline_ok: true,
+      break_points: null, depends_on: lead, pointer: { type: "book_chapter", source: BOOK, chapter: c.ch, label: c.title },
+      target: null, benchmark_week: week, alternatives: [], topic: c.at.topic,
+    };
+    // before the week's first task in its section (after any lead video), chapters in order
+    const at = out.findIndex((x) => x.plan_week === week && x.section === c.section && !x.id.startsWith("mh-ch"));
+    const i = at === -1 ? out.findIndex((x) => x.plan_week > week) : at;
+    out = i === -1 ? [...out, t] : [...out.slice(0, i), t, ...out.slice(i)];
+  }
+  return out;
+}
+
+/**
+ * 6. Pacing sprints (from GMAT Club's week 10): 10 questions in 20 minutes, no pausing, a guess after a
+ * minute without a way in, never a blank, then the guessed ones retried untimed before any solution.
+ * Two each for quant, DI and CR in plan weeks 9, 10 and 11, from the plan's own lists.
+ */
+function sprints(tasks: Task[]): Task[] {
+  if (tasks.some((t) => t.id.startsWith("sprint-"))) return tasks;
+  const pick = <T,>(xs: T[], n: number, k: number) => xs.length ? Array.from({ length: Math.min(n, xs.length) }, (_, i) => xs[(k * n + i) % xs.length]) : [];
+  const poolOf = (week: number, section: string) => {
+    const timed = tasks.filter((t) => t.kind === "gmatclub_set" && t.timed && t.section === section && t.pointer.lists_pool?.length && t.plan_week <= week + 1)
+      .sort((a, b) => Math.abs(a.plan_week - week) - Math.abs(b.plan_week - week))[0];
+    if (timed) return timed.pointer.lists_pool!.map((l) => ({ label: `${l.topic ?? "mixed"}${l.qtype && l.qtype !== "PS" ? ` (${l.qtype === "GT" ? "graphs & tables" : l.qtype})` : ""}`, url: l.url }));
+    const lists = tasks.filter((t) => t.kind === "gmatclub_set" && t.section === section && t.pointer.lists && t.plan_week <= week)
+      .flatMap((t) => Object.entries(t.pointer.lists!).filter(([k]) => k !== "easy").map(([, url]) => ({ label: t.topic ?? section, url })));
+    return lists.reverse();
+  };
+  let out = [...tasks];
+  for (const week of [9, 10, 11]) {
+    for (const section of ["quant", "di", "cr"] as const) {
+      const pool = poolOf(week, section);
+      if (!pool.length) continue;
+      for (const n of [1, 2]) {
+        const t: Task = {
+          id: `sprint-w${String(week).padStart(2, "0")}-${section}-${n}`, plan_week: week, section, kind: "gmatclub_set",
+          title: `Timed sprint · ${section === "di" ? "DI" : section === "cr" ? "CR" : "quant"} · 10 questions in 20 minutes`,
+          optional: "recommended", est_minutes: 30, review_minutes: 0, needs_desk: section !== "cr", bus_ok: section === "cr", offline_ok: false,
+          break_points: null, depends_on: [], pointer: { type: "sprint", count: 10, minutes: 20, links: pick(pool, 3, (week - 9) * 2 + n - 1) },
+          target: null, benchmark_week: week, alternatives: [], timed: true,
+        };
+        const last = out.map((x) => x.plan_week === week && x.section === section).lastIndexOf(true);
+        out = last === -1 ? [...out, t] : [...out.slice(0, last + 1), t, ...out.slice(last + 1)];
+      }
+    }
+  }
+  return out;
+}
+
 const cache = new WeakMap<Content, Task[]>();
 
 export function fixedPlan(content: Content): Task[] {
@@ -120,6 +234,8 @@ export function fixedPlan(content: Content): Task[] {
   tasks = sameBookChains(tasks);
   tasks = leadVideos(tasks);
   tasks = shareCj(tasks);
+  tasks = bookChapters(tasks);
+  tasks = sprints(tasks);
   cache.set(content, tasks);
   return tasks;
 }

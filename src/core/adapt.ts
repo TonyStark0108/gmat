@@ -120,8 +120,13 @@ export function weakestSection(sec: Map<AdaptSection, { attempts: number; accura
 
 export type Difficulty = "easy" | "medium" | "hard";
 
-/** Easy lists under 70%, back to medium above 75%, hard after 80%+ on two separate sets. Medium by default. */
-export function difficultyFor(stat: TopicStat | undefined): Difficulty {
+/**
+ * Easy lists under 70%, back to medium above 75%, hard after 80%+ on two separate sets. Medium by default.
+ * With a flow zone (flow.ts), the zone decides: a stretch gets the easier list, an easy zone the harder one.
+ */
+export function difficultyFor(stat: TopicStat | undefined, zone?: "new" | "stretch" | "flow" | "easy"): Difficulty {
+  if (zone === "stretch") return "easy";
+  if (zone === "easy") return "hard";
   if (!stat || stat.attempts < ADAPT_MIN_ATTEMPTS) return "medium";
   if (stat.accuracy < 0.7) return "easy";
   if (stat.sets.filter((s) => s.accuracy >= 0.8 && s.n >= 5).length >= 2) return "hard";

@@ -72,6 +72,7 @@ export function whereOf(p: Piece): string {
     case "di_set": return "book and links";
     case "mock": return t.pointer.type === "official_mock" ? "opens mba.com" : "opens GMAT Club";
     case "admin": return "opens the page";
+    case "article": return t.pointer.type === "book_chapter" ? "in the book, on screen" : "opens the page";
     case "cards": return "reads here";
     case "recall": return "with the book";
     default: return "opens the page";

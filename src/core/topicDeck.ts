@@ -271,6 +271,12 @@ const deck: [string, [string, string][]][] = [
     ["Timing: method first", "Get the method right with no clock. Then do the same kind with one."],
     ["Timing: two minutes", "At about two minutes with no clear way in, guess the likeliest answer and move on."],
   ]],
+  ["pacing", [
+    ["Pacing a 45-minute section", "About question 5 with 35 minutes left, 10 with 25, 15 with 15. Short on time? Guess sooner on the next one you can't see into."],
+    ["The one-minute rule", "A minute in with no clear way forward: cross out what you can, make your best guess, move on."],
+    ["Blanks", "A blank costs more than a guess. Answer every question, even with a quick guess in the last seconds."],
+    ["After a sprint", "Retry the ones you guessed with no clock before reading any solution: that shows whether it was time or the method."],
+  ]],
   ["tag:concept", [["A concept gap: what helps", "The topic's video again, then easier questions on it before harder ones."]]],
   ["tag:process", [["A process slip: what helps", "Write out the steps for this type of question, then do two more the same way."]]],
 ];

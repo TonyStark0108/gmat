@@ -98,6 +98,7 @@ function hasProgress(p: Piece, c: CardCtx): boolean {
   if (k === "video" || (k === "test_prep" && p.task.pointer.youtube_id)) return (c.d.video.get(p.id)?.seconds ?? 0) >= 30;
   if (k === "recall") return [...c.d.seen.keys()].some((x) => x.startsWith(`recall-group:${p.id}:`));
   if (k === "cards") return false;
+  if (k === "article" && p.task.pointer.type === "book_chapter") return false;   // reading in your own copy: nothing to resume
   return true;
 }
 

@@ -46,7 +46,7 @@ export function studentBrief(m: Model): string {
     L.push("", "## Topics, weakest first (recent attempts count more)");
     for (const t of topics) {
       const tags = Object.entries(t.tags).sort((a, b) => b[1]! - a[1]!).slice(0, 2).map(([k, n]) => `${k} ${n}`).join(", ");
-      L.push(`- ${topicName(t.topic)} (${SEC[t.section] ?? t.section}): ${pct(t.accuracy)} over ${t.attempts}${t.inReview ? `, ${t.inReview} in review` : ""}${tags ? `; reasons: ${tags}` : ""}.`);
+      L.push(`- ${topicName(t.topic)} (${SEC[t.section] ?? t.section}): ${pct(t.accuracy)} over ${t.attempts}${t.inReview ? `, ${t.inReview} in review` : ""}${tags ? `; reasons: ${tags}` : ""}; flow zone: ${m.adapt.zone(t.topic)} (stretch = too hard right now, easy = too easy; aim to keep them in flow).`);
     }
   }
 

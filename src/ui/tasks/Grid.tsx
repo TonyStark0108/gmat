@@ -8,6 +8,8 @@ import { useApp } from "../../app/store";
 import { now } from "../../core/clock";
 import { BOOK_NAMES, type BookQuestion } from "../../core/content";
 import { markSet, parseTyped } from "../../core/grid";
+import { paceLine, topicsOfPiece } from "../../core/flow";
+import { topicName } from "../../core/topics";
 import type { Answer } from "../../core/events";
 import type { Piece } from "../../core/pieces";
 import { record } from "../../data/db";
@@ -167,9 +169,24 @@ export function BookGrid({ piece, onDone, numbers, bookId, embedded, onSubmitted
         <div style={{ fontSize: 15, color: "var(--muted)" }}>
           {book === "og" ? "Work in the book. Enter each answer as you go." : `Work from the ${BOOK_NAMES[book]} on screen. Enter each answer as you go.`}
         </div>
+        <FlowLines piece={piece} />
         {body}
       </div>
     </Screen>
+  );
+}
+
+/** The flow zone for this set's main topic: in words, which list and whether the clock is on. */
+function FlowLines({ piece }: { piece: Piece }) {
+  const { m, content } = useApp();
+  const ft = topicsOfPiece(piece, m.reviews, content ?? undefined)[0];
+  if (!ft) return null;
+  const z = m.adapt.zone(ft);
+  return (
+    <>
+      {z === "stretch" && <div className="small">{topicName(ft)} is a stretch right now: no clock, and set each one up before you solve it.</div>}
+      <div className="small">{paceLine(m.adapt.pace(ft), piece.section)}</div>
+    </>
   );
 }
 

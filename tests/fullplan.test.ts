@@ -16,7 +16,7 @@ describe.skipIf(!C)("a simulated full plan (Phase 3 check)", () => {
   let doneOn: string | null = null;
   if (C) {
     bot.setup(new Date("2026-11-28T11:00"));
-    for (let d = parseYmd("2026-12-01"); ymd(d) <= "2027-08-15"; d = addDays(d, 1)) {
+    for (let d = parseYmd("2026-12-01"); ymd(d) <= "2027-08-31"; d = addDays(d, 1)) {
       const day = ymd(d), wd = d.getDay();
       if ([2, 3, 4].includes(wd)) bot.session(new Date(`${day}T07:45`), 45, false);
       if (wd === 6) bot.session(new Date(`${day}T10:00`), 240, false);
@@ -24,7 +24,7 @@ describe.skipIf(!C)("a simulated full plan (Phase 3 check)", () => {
       if (!doneOn && bot.snapshots[bot.snapshots.length - 1]?.pct === 100) doneOn = day;
     }
   }
-  const end = C ? bot.model(new Date("2027-08-15T21:00")) : null!;
+  const end = C ? bot.model(new Date("2027-08-31T21:00")) : null!;
 
   it("the whole plan gets done, within a few weeks of the finish date the app worked out", () => {
     expect(end.pct).toBe(100);

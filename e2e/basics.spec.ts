@@ -5,6 +5,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import fs from "node:fs";
 import type { Content } from "../src/core/content";
+import { buildModel } from "../src/core/model";
+import { titleOf } from "../src/ui/copy";
 import { CONTENT, at, card, firstWeek, hasContent, jumpTo, launch, profileDir, resetAlbum, seed, setPrefix, setStep, settled, snap, writeAlbum } from "./helpers";
 
 test.skip(!hasContent(), "needs data/gmat-content-v1.json (run `npm run content`)");
@@ -52,11 +54,44 @@ test("the basics, end to end", async () => {
   await expect(page.getByText(/Passage 1 of 3/i)).toBeVisible();
   await snap(page, "Its three passages open in the reader, from a reading set the plan doesn't use.");
 
+  setStep("2b · From GMAT Club's plan: a chapter, a sprint, and how a set felt");
+  await page.goto(`/#/task/${encodeURIComponent("mh-ch06#0")}`);
+  await settled(page);
+  await expect(page.getByText("Read chapter 6, Percents, in your copy of All the Quant + DI", { exact: false })).toBeVisible();
+  await snap(page, "A chapter of All the Quant + DI, the week percents first comes up: on screen, so it fits a ride.");
+  await page.goto(`/#/task/${encodeURIComponent("sprint-w09-quant-1#0")}`);
+  await settled(page);
+  await page.getByRole("button", { name: "Start the 20-minute clock" }).click();
+  await expect(page.getByText("Question 1 of 10")).toBeVisible();
+  await expect(page.getByText("On pace.")).toBeVisible();
+  await page.getByRole("button", { name: "Next question" }).click();
+  await expect(page.getByText("Question 2 of 10")).toBeVisible();
+  await snap(page, "A timed sprint: 10 questions in 20 minutes, a tap per question, and whether you're on pace.");
+  await page.goto(`/#/task/${encodeURIComponent("w02-quant-05#0")}`);
+  await settled(page);
+  await expect(page.getByText(/^(Untimed|Soft-timed|Normal pace):/)).toBeVisible();
+  await page.getByRole("button", { name: "more Right" }).click();
+  await page.getByRole("button", { name: "Save it" }).click();
+  await expect(page.getByText("How did that feel?")).toBeVisible();
+  await page.getByRole("button", { name: "Too hard" }).click();
+  await expect(page.getByText(/Noted. Next time .* starts easier, with no clock./)).toBeVisible();
+  await snap(page, "After a set, one tap: too easy, about right, or too hard. It moves the topic's zone: easier and untimed next time.");
+
   setStep("3 · A task you only opened doesn't take over home");
+  // a book set opened and left with nothing entered isn't "waiting where you left it"
+  const book = buildModel(content, bot.events, new Date("2026-12-08T19:00")).plan.find((p) => p.task.kind === "og_set" && p.planWeek >= 4)!;
+  await page.goto(`/#/task/${encodeURIComponent(book.id)}`);
+  await settled(page);
   await page.goto("/#/");
   await settled(page);
+  await expect(card(page).locator(".t")).not.toHaveText(titleOf(book));
+  // work on another site that was opened does come back, and "Not now" moves past it
+  for (let i = 0; i < 6 && (await card(page).locator(".eyebrow").textContent()) === "Waiting where you left it"; i++) {
+    await card(page).getByRole("button", { name: "Not now" }).click();
+    await page.waitForTimeout(200);
+  }
   await expect(card(page).locator(".eyebrow")).not.toHaveText("Waiting where you left it");
-  await snap(page, "Back home after only opening a task: the card is the next thing, not “Waiting where you left it”.");
+  await snap(page, "Back home: a set you only opened doesn't take over, and anything waiting has “Not now”.");
 
   setStep("4 · On a 390-pixel phone");
   await page.setViewportSize({ width: 390, height: 844 });

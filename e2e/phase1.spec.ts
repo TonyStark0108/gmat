@@ -147,7 +147,10 @@ test("the Phase 1 checklist, end to end", async () => {
   await expect(page.locator(".status")).toContainText("bus");
   await snap(page, "B turns bus mode on: the mix switch goes and the card is ride work.");
   await page.keyboard.press("w");
-  await page.getByRole("button", { name: /An LSAT reading set/ }).first().click();
+  // week 1's rides now start with the book's chapters, so the reading set may sit in next week's list
+  const rcChip = page.getByRole("button", { name: /An LSAT reading set/ }).first();
+  if (await rcChip.count()) await rcChip.click();
+  else { await page.goto(`/#/task/${encodeURIComponent("w01-rc-02#0")}`); await settled(page); }
   await expect(page.getByText(/Passage 1 of 4/i)).toBeVisible();
   await snap(page, "The reading set opens in the reader, in a plain reading font.");
   await page.keyboard.press("Enter");                               // I've read it

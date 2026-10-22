@@ -47,7 +47,9 @@ function RcInner({ piece, onDone, section }: { piece: Piece; onDone: (l: Logged 
   const [qi, setQi] = useState(place.q);
   const time = useTaskTime(piece.id, bus ? "bus" : "desk", "rc");
   const startedAt = d.started.get(piece.id) ?? now().getTime();
-  const mode = timerMode(piece.planWeek || 1, m.adapt.timingEarly("rc"));
+  // the flow zone: a stretch stays untimed, an easy zone gets the visible clock
+  const rz = m.adapt.zone("rc");
+  const mode = rz === "stretch" ? "untimed" : rz === "easy" ? "visible" : timerMode(piece.planWeek || 1, m.adapt.timingEarly("rc"));
   const [, tick] = useState(0);
   useEffect(() => { const t = setInterval(() => tick((x) => x + 1), 15000); return () => clearInterval(t); }, []);
 

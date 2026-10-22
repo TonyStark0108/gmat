@@ -87,7 +87,8 @@ export type EventBody =
   | { type: "card.drafted"; item: string; front: string; back: string }      // Claude's draft of a card from a mistake
   // ---- worth another look: a question you got right that you want back (or one the app flags)
   | { type: "look"; item: string; on: boolean }
-  | { type: "retired"; item: string }                                         // recorded once, so the count never drops
+  | { type: "retired"; item: string }
+  | { type: "feel"; piece: string; feel: "easy" | "right" | "hard" }       // how a set felt: the flow zone's other half                                         // recorded once, so the count never drops
   // ---- when life happens
   | { type: "lifeup"; kind: "tonight" | "weekend" | "week"; from: string; to: string }
   | { type: "datecheck"; week: string; result: "safe" | "risk" | "past"; projected: string | null; target: string | null; extra?: number | null; choice?: "move" | "keep" | "fit" | "later" }
